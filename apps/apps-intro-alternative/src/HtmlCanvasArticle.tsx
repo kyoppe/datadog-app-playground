@@ -123,7 +123,7 @@ function HtmlCanvasArticle() {
     const [ready, setReady] = useState(false);
     const [effectId, setEffectId] = useState<EffectId>(INITIAL_EFFECT);
     const [notice, setNotice] = useState<string | null>(null);
-    const [canReset, setCanReset] = useState(false);
+    const [resetLabel, setResetLabel] = useState<string | null>(null);
 
     const selectEffect = useCallback((id: EffectId) => {
         requestedEffectRef.current = id;
@@ -220,7 +220,7 @@ function HtmlCanvasArticle() {
                 created.resize(size.width, size.height, size.dpr);
                 effect = created;
                 activeId = entry.id;
-                setCanReset(typeof created.reset === 'function');
+                setResetLabel(created.reset ? (created.resetLabel ?? 'Reset') : null);
             } catch (error) {
                 console.error(`${entry.label} failed to start`, error);
                 if (entry.id === 'water') {
@@ -931,13 +931,13 @@ function HtmlCanvasArticle() {
                             {entry.label}
                         </button>
                     ))}
-                    {canReset && (
+                    {resetLabel && (
                         <button
                             type="button"
                             className="reset"
                             onClick={() => resetRef.current?.()}
                         >
-                            Reset
+                            {resetLabel}
                         </button>
                     )}
                 </div>

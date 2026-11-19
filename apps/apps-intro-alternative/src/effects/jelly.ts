@@ -1667,6 +1667,8 @@ export function createJelly(gl: WebGL2RenderingContext): Effect {
         pointerEvent,
         // The page is set inside the jelly, nowhere near where it was laid out.
         pageInteractive: () => false,
+        // The jelly settles by itself; what the button does is pick it up and drop it again.
+        resetLabel: 'Drop it',
         reset,
         render,
         dispose,

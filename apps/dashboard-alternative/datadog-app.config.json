@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datadoghq.com",
+  "id": "8c2a4973-c6b6-4b8f-94b5-892a08fdf4a1",
+  "name": "Dashboard Alternative",
+  "tags": []
+}

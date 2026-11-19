@@ -47,6 +47,8 @@ export interface Effect {
     resize(width: number, height: number, dpr: number): void;
     /** Optional: put the effect back in its starting state (the host's Reset button). */
     reset?(): void;
+    /** Optional: text for the host's reset button when it does not mean "Reset". */
+    readonly resetLabel?: string;
     /**
      * Optional: false while the effect draws the page somewhere other than where it was laid
      * out (or smears it), so links are not left clickable at their old place.
