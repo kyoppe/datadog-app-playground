@@ -129,12 +129,15 @@ const GROUND_VS = `#version 300 es
 precision highp float;
 uniform mat4 uVP;
 uniform vec2 uHalf;
+uniform vec2 uPageHalf; // where the table itself goes: the board's target size
 out vec2 vUV;
 out vec3 vWorld;
 void main() {
     vec2 cn = vec2(float(gl_VertexID & 1) * 2.0 - 1.0, float(gl_VertexID >> 1) * 2.0 - 1.0);
-    vUV = cn * 0.5 + 0.5;
     vWorld = vec3(cn.x * uHalf.x, 0.0, cn.y * uHalf.y);
+    // While the board is still shrinking to the table (or growing), the table keeps its size and
+    // the rest of the board is bare paper: the table is never stretched.
+    vUV = vWorld.xz / uPageHalf * 0.5 + 0.5;
     gl_Position = uVP * vec4(vWorld, 1.0);
 }
 `;
@@ -147,7 +150,10 @@ out vec4 o;
 ${PAGE_TEX}
 ${SHADOW_LIB}
 void main() {
-    vec3 c = pageTex(vUV) * 0.97;
+    vec3 c = pageTex(clamp(vUV, 0.0, 1.0)) * 0.97;
+    if (vUV.x < 0.0 || vUV.x > 1.0 || vUV.y < 0.0 || vUV.y > 1.0) {
+        c = vec3(0.953, 0.941, 0.918) * 0.97;
+    }
     // on the board the shadows are lighter, so the numbers stay easy to read
     c = mix(c, vec3(0.02, 0.015, 0.07), 0.36 * (1.0 - lit(vWorld, vec3(0.0, 1.0, 0.0))));
     o = vec4(c, 1.0);
@@ -1383,6 +1389,7 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         gl.useProgram(groundProg.program);
         gl.uniformMatrix4fv(gu.uVP, false, camera.vp);
         gl.uniform2f(gu.uHalf, boardHx, boardHzCur);
+        gl.uniform2f(gu.uPageHalf, boardHx, boardHz);
         gl.uniform1i(gu.uPage, 0);
         bindShadows(groundProg);
         gl.bindVertexArray(null);
