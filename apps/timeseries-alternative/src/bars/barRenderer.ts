@@ -51,6 +51,11 @@ const SHADOW_REACH = 1.3;
 const SHADOW_LIGHT = normalize3([-SHADOW_DIR[0] * SHADOW_REACH, 1, -SHADOW_DIR[1] * SHADOW_REACH]);
 const SHADOW_MAP_SIZE = 2048;
 
+// The default colours: the table top, and the room round it at the top and the bottom.
+const DEFAULT_DESK = [0.5, 0.485, 0.47];
+const DEFAULT_ROOM_A = [8 / 255, 10 / 255, 32 / 255];
+const DEFAULT_ROOM_B = [19 / 255, 15 / 255, 50 / 255];
+
 // The table the board stands on: a big plain top that fades into the dark room.
 const DESK_SIZE = 9;
 const DESK_Y = -SLAB_T - 0.0005;
@@ -67,18 +72,21 @@ void main() {
 const BG_FS = `#version 300 es
 precision highp float;
 uniform vec2 uRes;
+uniform vec3 uBgA;   // the room's colour at the top
+uniform vec3 uBgB;   // and at the bottom
+uniform float uClear; // 1: nothing at all (transparent)
 out vec4 o;
 void main() {
     vec2 uv = gl_FragCoord.xy / uRes;
     float t = 1.0 - uv.y;
-    vec3 c0 = vec3(8.0, 10.0, 32.0) / 255.0;
-    vec3 c1 = vec3(19.0, 15.0, 50.0) / 255.0;
+    vec3 c0 = uBgA;
+    vec3 c1 = uBgB;
     vec3 c = mix(c0, c1, smoothstep(0.0, 1.0, t));
     float r = length((uv - vec2(0.5, 0.48)) * vec2(uRes.x / uRes.y, 1.0));
     c += vec3(0.03, 0.025, 0.07) * (1.0 - smoothstep(0.0, 0.75, r));
     float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
     c += (n - 0.5) / 255.0;
-    o = vec4(c, 1.0);
+    o = uClear > 0.5 ? vec4(0.0) : vec4(c, 1.0);
 }
 `;
 
@@ -87,7 +95,7 @@ precision highp float;
 uniform sampler2D uTex;
 out vec4 o;
 void main() {
-    o = vec4(texelFetch(uTex, ivec2(gl_FragCoord.xy), 0).rgb, 1.0);
+    o = texelFetch(uTex, ivec2(gl_FragCoord.xy), 0);
 }
 `;
 
@@ -179,16 +187,24 @@ const DESK_FS = `#version 300 es
 precision highp float;
 in vec2 vXZ;
 uniform float uY;
+uniform vec3 uDesk;   // the table top
+uniform float uClear; // 1: transparent, the shadows only
 out vec4 o;
 ${SHADOW_LIB}
 void main() {
     float r = length(vXZ);
-    vec3 c = vec3(0.50, 0.485, 0.47);
+    vec3 c = uDesk;
     c *= 0.70 + 0.44 * (1.0 - smoothstep(0.3, 3.5, r));
     c = mix(c, vec3(0.02, 0.015, 0.07), 0.5 * (1.0 - lit(vec3(vXZ.x, uY, vXZ.y), vec3(0.0, 1.0, 0.0))));
     float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
     c += (n - 0.5) / 255.0;
-    o = vec4(c, 1.0 - smoothstep(3.0, 7.0, r));
+    float fade = 1.0 - smoothstep(3.0, 7.0, r);
+    if (uClear > 0.5) {
+        float shade = 0.5 * (1.0 - lit(vec3(vXZ.x, uY, vXZ.y), vec3(0.0, 1.0, 0.0)));
+        o = vec4(vec3(0.02, 0.015, 0.07), shade * fade);
+    } else {
+        o = vec4(c, fade);
+    }
 }
 `;
 
@@ -855,6 +871,11 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     let zoom = 1;
     let zoomT = 1;
     let resetting = false;
+    // the colour of the table (and, darker, the room round it); null is the default
+    let deskColor: [number, number, number] | null = null;
+    let transparentRoom = false; // no table, no room: the page behind the chart shows through
+    // where Reset view goes: the usual view, or the widget's starting view
+    let resetTo = { yaw: 0, pitch: DEF_PITCH, zoom: 1 };
     // The opening shot: a close-up from the side that swings out to the usual view, slowly.
     let introPending = true;
     // the opening shot's path: it ends at the home view
@@ -1051,8 +1072,8 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             yaw += (yawT - yaw) * k;
             pitch += (pitchT - pitch) * k;
             if (Math.abs(yawT - yaw) < 1e-3 && Math.abs(pitchT - pitch) < 1e-3) {
-                yaw = DEF_YAW;
-                pitch = DEF_PITCH;
+                yaw = yawT;
+                pitch = pitchT;
                 resetting = false;
             }
         } else if (autoRotate && !dragging && frame.time >= autoRotateResumeAt) {
@@ -1367,6 +1388,12 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         // background
         gl.useProgram(bgProg.program);
         gl.uniform2f(bgProg.uniforms.uRes, w, h);
+        const room = deskColor ?? DEFAULT_DESK;
+        const roomA = deskColor ? room.map((v) => v * 0.22) : DEFAULT_ROOM_A;
+        const roomB = deskColor ? room.map((v) => v * 0.32) : DEFAULT_ROOM_B;
+        gl.uniform3f(bgProg.uniforms.uBgA, roomA[0], roomA[1], roomA[2]);
+        gl.uniform3f(bgProg.uniforms.uBgB, roomB[0], roomB[1], roomB[2]);
+        gl.uniform1f(bgProg.uniforms.uClear, transparentRoom ? 1 : 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
         gl.enable(gl.DEPTH_TEST);
@@ -1405,9 +1432,12 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         gl.uniformMatrix4fv(du.uVP, false, camera.vp);
         gl.uniform1f(du.uSize, DESK_SIZE);
         gl.uniform1f(du.uY, DESK_Y);
+        gl.uniform3f(du.uDesk, room[0], room[1], room[2]);
+        gl.uniform1f(du.uClear, transparentRoom ? 1 : 0);
         bindShadows(deskProg);
         gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        // (alpha is kept as it is, so that a transparent room stays transparent)
+        gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.bindVertexArray(null);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -1498,11 +1528,24 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         setScene(s) {
             applyScene(s);
         },
+        setBackground(color) {
+            transparentRoom = color === 'transparent';
+            deskColor = Array.isArray(color) ? [color[0], color[1], color[2]] : null;
+        },
+        setResetView(view) {
+            resetTo = view
+                ? {
+                      yaw: wrapPi(view.yaw),
+                      pitch: Math.min(PITCH_MAX, Math.max(PITCH_MIN, view.pitch)),
+                      zoom: Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, view.zoom)),
+                  }
+                : { yaw: 0, pitch: DEF_PITCH, zoom: 1 };
+        },
         resetView() {
             resetting = true;
-            yawT = yaw - wrapPi(yaw - DEF_YAW);
-            pitchT = DEF_PITCH;
-            zoomT = 1;
+            yawT = yaw - wrapPi(yaw - (DEF_YAW + resetTo.yaw));
+            pitchT = resetTo.pitch;
+            zoomT = resetTo.zoom;
             yawV = 0;
             pitchV = 0;
         },

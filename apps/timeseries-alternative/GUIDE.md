@@ -33,6 +33,14 @@ It works like the query box of a Datadog Timeseries widget:
   message says where it goes wrong. The text is also what you copy into Edit Graph
   to chart the same query on a dashboard.
 
+### How the points of a column are combined
+
+A column can be wider than Datadog's own points (a week is drawn in 6 hour columns, Datadog's
+points may be 1 hour apart). The points that fall into one column are combined the way the query
+combines them in time: `.as_count()` and `.rollup(sum, ...)` add them up (a count of events per
+column), `.rollup(max, ...)` and `.rollup(min, ...)` take the largest or smallest, and anything else
+is the average, as in Datadog. `sum:` on its own adds up *series* (the tags), not time.
+
 ## The time frame (top right)
 
 Click the box and type what you would type in a Datadog time selector:
@@ -63,6 +71,7 @@ address, so a link opens the same view.
 | Control | What it does |
 | --- | --- |
 | **Stack** | One tower per time bucket with the series stacked inside it, as a stacked bar chart. The table shrinks to a Total row and a legend names the colours |
+| **Options** | Widget only. The widget's bar is short (Stack, Sound, Reset view); this opens a panel with Sort, Spin, Color and Save as image |
 | **Sort** | Orders the rows: by value (highest or lowest first), or by one of the tags the series are grouped by (A to Z, Z to A). The tag choices appear when the query has a `by {...}`. Top N still picks the strongest series; Sort only orders them. Kept in the link |
 | **Top 5 / 10 / 25 / 50** | How many series to draw. The rest are left out |
 | **Alert ≥** | Roofs at or above this value glow red |
@@ -81,9 +90,10 @@ Add the app to a dashboard as a widget. Edit Graph asks for:
 
 | Setting | |
 | --- | --- |
-| **Metrics query** | The query to chart, saved with the widget, so every device shows the same chart. On the widget the query shows as a line of text at the top left; click it to open the query builder and try another (not saved): switch it to text with `</>`, select the text and copy it here |
+| **Metrics query** | The query to chart, saved with the widget, so every device shows the same chart. On the widget there is no query bar; press **Query** at the top left to open the query builder and try another (not saved): switch it to text with `</>`, select the text and copy it here |
 | **Number of series** | 5, 10, 25 or 50 |
-| **Starting view** | The angle and zoom the board starts at, as `turn,tilt,zoom` (`0,48,1` is the usual view). Click the query at the top left of the widget: the note under it shows the current view, ready to copy here. A viewer who has turned the board sees the view they left it in, until this setting is changed |
+| **Starting view** | The angle and zoom the board starts at, as `turn,tilt,zoom` (`0,48,1` is the usual view). Press **Query** at the top left of the widget: the note under the query builder shows the current view, ready to copy here. A viewer who has turned the board sees the view they left it in, until this setting is changed |
+| **Background** | The colour behind the chart, as `#rrggbb`, or `transparent` (the dashboard shows through). Open **Options** at the lower right of the widget, pick **Colour** from the list or the colour wheel, and copy the code shown there. Empty is the usual dark background |
 | **Stacked** | Stack the series |
 | **Sort order** | `value` (highest first), `value:asc`, or a group tag such as `host` or `host:desc` |
 | **Spin** | Slowly turn the board |
@@ -91,10 +101,10 @@ Add the app to a dashboard as a widget. Edit Graph asks for:
 
 ### Starting view
 
-Turn and zoom the widget the way you want it to open, then click the query at the top left. The
+Turn and zoom the widget the way you want it to open, then press **Query** at the top left. The
 note under it shows the current view as a short code, for example `0,48,1`: click it, copy it, and
 paste it into the **Starting view** setting in Edit Graph. From then on the widget opens at that
-angle and zoom on every device. (`0,48,1` is the usual view: the turn in degrees, the tilt in
+angle and zoom on every device, and **Reset view** brings the board back to it. (`0,48,1` is the usual view: the turn in degrees, the tilt in
 degrees, and the zoom, where smaller is closer.)
 
 These are saved with that widget, so two widgets on one dashboard can show two different metrics,

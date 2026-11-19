@@ -34,11 +34,18 @@ export const appParameters = defineDatadogAppParameters({
             'How the rows are ordered: value (highest first), value:asc (lowest first), or one of the tags the series are grouped by, such as host (A to Z) or host:desc (Z to A).',
         default: 'value',
     },
+    background: {
+        type: 'string',
+        label: 'Background',
+        description:
+            'The colour behind the chart, as #rrggbb (for example #1d2342), or transparent (the dashboard shows through). Empty is the usual dark background. Open Options at the lower right of the widget, pick Color from the list or the colour wheel, and copy the code shown there.',
+        default: '',
+    },
     view: {
         type: 'string',
         label: 'Starting view',
         description:
-            'The angle and zoom the board starts at, as "turn,tilt,zoom": for example 0,48,1 is the usual view (turn in degrees from it, tilt in degrees, zoom: smaller is closer). Click the query at the top left of the widget to read the current view, and copy it here. Empty: the usual view. A viewer who has turned the board sees the view they left it in, until this setting is changed.',
+            'The angle and zoom the board starts at, as "turn,tilt,zoom": for example 0,48,1 is the usual view (turn in degrees from it, tilt in degrees, zoom: smaller is closer). Press Query at the top left of the widget to read the current view, and copy it here. Empty: the usual view. A viewer who has turned the board sees the view they left it in, until this setting is changed.',
         default: '',
     },
     spin: {

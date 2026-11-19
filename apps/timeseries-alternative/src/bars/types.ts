@@ -83,6 +83,10 @@ export interface BarRenderer {
      * elevation). Takes the shortest way round: never unwinds a full turn.
      */
     resetView(): void;
+    /** The colour of the table top (0..1 per channel), 'transparent', or null for the default. */
+    setBackground(color: [number, number, number] | 'transparent' | null): void;
+    /** Where resetView goes (yaw from the usual angle), or null for the usual view. */
+    setResetView(view: { yaw: number; pitch: number; zoom: number } | null): void;
     /** Multiply the camera distance by `factor` (< 1 zooms in), clamped to a sane range. */
     zoomBy(factor: number): void;
     /** Slowly spin the board like a turntable until the user drags or calls this with false. */

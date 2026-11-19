@@ -22,6 +22,8 @@ import {
     type HtmlInCanvasContext,
     type HtmlInCanvasElement,
 } from './htmlInCanvas';
+import { BackgroundPicker } from './BackgroundPicker';
+import { hexToRgb, TRANSPARENT } from './colors';
 import { QueryBuilder } from './QueryBuilder';
 import { TimeFrameSelector } from './TimeFrameSelector';
 import { createSound, type Sound } from './sound';
@@ -42,7 +44,7 @@ const DEFAULT_LIMIT = 10;
 const LIVE_INTERVAL_MS = 15_000;
 const DEFAULT_QUERY = 'avg:system.cpu.user{*} by {host}';
 const DEFAULT_FRAME_TEXT = '1h';
-const MAX_CONSECUTIVE_PAINT_FAILURES = 5;
+const MAX_CONSECUTIVE_PAINT_FAILURES = 20;
 
 // Geometry of the table that becomes the ground of the 3D chart.
 const NAME_WIDTH = 190;
@@ -375,6 +377,7 @@ function TimeseriesAlternative() {
     const gridRef = useRef<MetricGrid | undefined>(undefined);
 
     const [native, setNative] = useState(supportsHtmlInCanvas);
+    const paintRetriesRef = useRef(0);
     const [ready, setReady] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
     const [query, setQuery] = useState(initial.query);
@@ -383,9 +386,13 @@ function TimeseriesAlternative() {
     // On a widget the settings give the starting point; pressing the button overrides it for as
     // long as the page is open (it is not saved).
     const [stackTouched, setStackTouched] = useState(false);
+    // The table colour, on a widget only: the setting is the starting point, and a pick made
+    // here is not saved.
+    const [pickedBackground, setPickedBackground] = useState<string | null>(null);
     const [orderTouched, setOrderTouched] = useState(false);
     const [queryTouched, setQueryTouched] = useState(false);
     const [queryOpen, setQueryOpen] = useState(false);
+    const [optionsOpen, setOptionsOpen] = useState(false);
     const [viewText, setViewText] = useState('');
     const [limit, setLimit] = useState(initial.limit);
     const [order, setOrder] = useState(initial.order);
@@ -829,7 +836,7 @@ function TimeseriesAlternative() {
         canvas.setAttribute('content', 'drawable');
         article.setAttribute('drawable', '');
 
-        const gl = canvas.getContext('webgl2', { alpha: false }) as HtmlInCanvasContext | null;
+        const gl = canvas.getContext('webgl2', { alpha: true }) as HtmlInCanvasContext | null;
         const pageTexture = gl?.createTexture();
         if (!gl || !pageTexture) {
             fallBack('WebGL 2 is not available, so the table is shown flat.');
@@ -997,10 +1004,24 @@ function TimeseriesAlternative() {
                 setReady(true);
             } catch (error) {
                 // The element may not have a cached paint record yet; retry a few times.
-                failures += 1;
+                failures = visible && !document.hidden ? failures + 1 : 0;
                 if (failures >= MAX_CONSECUTIVE_PAINT_FAILURES) {
                     console.error('The 3D chart failed to paint', error);
-                    fallBack('The 3D chart stopped painting, so the table is shown flat.');
+                    const reason = error instanceof Error ? `${error.name}: ${error.message}` : '';
+                    // A widget can be painted late (the dashboard lays it out after the page has
+                    // loaded): try the 3D chart again a couple of times before giving up on it.
+                    if (paintRetriesRef.current < 3) {
+                        paintRetriesRef.current += 1;
+                        disposed = true;
+                        window.setTimeout(() => {
+                            setNative(false);
+                            window.setTimeout(() => setNative(true), 400);
+                        }, 0);
+                        return;
+                    }
+                    fallBack(
+                        `The 3D chart stopped painting, so the table is shown flat.${reason ? ` (${reason})` : ''}`,
+                    );
                     return;
                 }
             }
@@ -1008,6 +1029,18 @@ function TimeseriesAlternative() {
             // Keep animating: schedule the next paint even when the DOM is unchanged.
             canvas.requestPaint();
         };
+
+        // Scrolled out of sight (or in a hidden tab) the browser stops painting the page: that is
+        // not a failure, and the chart paints again when it comes back.
+        let visible = true;
+        const visibility = new IntersectionObserver((entries) => {
+            visible = entries.some((entry) => entry.isIntersecting);
+            if (visible) {
+                failures = 0;
+                canvas.requestPaint();
+            }
+        });
+        visibility.observe(canvas);
 
         const resizeObserver = new ResizeObserver(syncCanvasSize);
         resizeObserver.observe(canvas);
@@ -1026,6 +1059,7 @@ function TimeseriesAlternative() {
             stage?.removeEventListener('wheel', onWheel);
             canvas.removeEventListener('paint', onPaint);
             resizeObserver.disconnect();
+            visibility.disconnect();
             rendererRef.current = null;
             renderer.dispose();
             gl.deleteTexture(pageTexture);
@@ -1050,6 +1084,20 @@ function TimeseriesAlternative() {
             rendererRef.current?.setHomeView(view);
         }
     }, [prefs, viewSetting, ready]);
+
+    const savedBackground =
+        parameters.status === 'ready' ? parameters.values.background.trim() : '';
+    const backgroundNow = embedded ? (pickedBackground ?? savedBackground) : '';
+    const clear = backgroundNow === TRANSPARENT;
+    useEffect(() => {
+        rendererRef.current?.setBackground(clear ? TRANSPARENT : hexToRgb(backgroundNow));
+        document.documentElement.toggleAttribute('data-clear', clear);
+    }, [backgroundNow, clear, ready]);
+
+    // Reset view goes to the widget's starting view, if it has one.
+    useEffect(() => {
+        rendererRef.current?.setResetView(viewSetting ? parseViewSetting(viewSetting) : null);
+    }, [viewSetting, ready]);
 
     // While the query panel is open on a widget, show the view as the setting spells it.
     useEffect(() => {
@@ -1137,6 +1185,12 @@ function TimeseriesAlternative() {
                     overflow: hidden;
                     background: #0d1030;
                     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                }
+
+                html[data-clear],
+                html[data-clear] body,
+                html[data-clear] .chart {
+                    background: transparent;
                 }
 
                 .stage {
@@ -1644,11 +1698,20 @@ function TimeseriesAlternative() {
                     border-color: rgba(255, 140, 140, 0.5);
                 }
 
+                .bar.stack {
+                    flex-direction: column;
+                    align-items: flex-start;
+                    justify-content: flex-start;
+                    gap: 6px;
+                }
+
+                /* the button stays where it is, whatever the builder beside it does */
+                .bar.stack .query-group {
+                    align-items: flex-start;
+                }
+
                 .query-notes {
-                    position: fixed;
-                    z-index: 6;
-                    top: 62px;
-                    left: 12px;
+                    pointer-events: auto;
                     display: flex;
                     flex-direction: column;
                     align-items: flex-start;
@@ -1750,6 +1813,115 @@ function TimeseriesAlternative() {
                     background: #5b44c9;
                     font-size: 10px;
                     letter-spacing: 0.06em;
+                }
+
+                .picker {
+                    position: fixed;
+                    z-index: 7;
+                    right: 12px;
+                    bottom: 64px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 12px;
+                    border: 1px solid rgba(190, 180, 255, 0.3);
+                    border-radius: 14px;
+                    color: #d6dafc;
+                    background: rgba(10, 14, 38, 0.92);
+                    font: 12px Inter, ui-sans-serif, system-ui, sans-serif;
+                }
+
+                .options {
+                    align-items: stretch;
+                    min-width: 230px;
+                }
+
+                /* the Options panel: a label and its control side by side where the label says
+                   something the control does not; a button that says it all is the whole row */
+                .option-row {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 12px;
+                }
+
+                .options .option-row select {
+                    border: 1px solid rgba(190, 180, 255, 0.3);
+                    border-radius: 8px;
+                }
+
+                .options > select,
+                .options > button,
+                .options > .picker-button {
+                    width: 100%;
+                    text-align: left;
+                }
+
+                .options > select {
+                    border: 1px solid rgba(190, 180, 255, 0.3);
+                    border-radius: 8px;
+                }
+
+                .options .picker {
+                    flex: 1 1 100%;
+                    position: static;
+                    padding: 8px 0 0;
+                    border: 0;
+                    background: transparent;
+                }
+
+                .picker-swatches {
+                    display: grid;
+                    grid-template-columns: repeat(5, 28px);
+                    gap: 6px;
+                }
+
+                .bar .swatch-button,
+                .swatch-button {
+                    width: 28px;
+                    height: 28px;
+                    border: 2px solid rgba(255, 255, 255, 0.35);
+                    border-radius: 8px;
+                    padding: 0;
+                    cursor: pointer;
+                }
+
+                .swatch-button.on {
+                    border-color: #ffffff;
+                    box-shadow: 0 0 0 2px #7c4dc8;
+                }
+
+                .picker-wheel {
+                    width: 150px;
+                    height: 150px;
+                    border-radius: 50%;
+                    cursor: crosshair;
+                    touch-action: none;
+                }
+
+                .picker-brightness {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .picker-code {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 4px;
+                }
+
+                .picker-code input {
+                    height: 24px;
+                    border: 1px solid rgba(190, 180, 255, 0.4);
+                    border-radius: 6px;
+                    padding: 0 8px;
+                    color: #ffffff;
+                    background: rgba(255, 255, 255, 0.1);
+                    font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+                    text-align: center;
                 }
 
                 .setup-note {
@@ -2066,36 +2238,28 @@ function TimeseriesAlternative() {
 
             {/* Top: the query on the left, which grows with what is in it and wraps only when it
                 would run into the time selector, and the time selector on its own on the right. */}
-            <div className="bar">
+            <div className={`bar${embedded ? ' stack' : ''}`}>
                 <div className="group query-group">
-                    {embedded && !queryOpen ? (
-                        // on a widget the query is a line of text; a click opens the builder
-                        <button
-                            type="button"
-                            className="qb-fixed qb-open"
-                            title="Click to build another query, or to copy this one (not saved)"
-                            onClick={() => setQueryOpen(true)}
-                        >
-                            {activeQuery.trim() && !needsSetup ? activeQuery : 'Set a query'}
-                        </button>
-                    ) : savedQuery && !embedded ? (
+                    {embedded ? (
+                        <>
+                            <button
+                                type="button"
+                                className={queryOpen ? 'on' : ''}
+                                title="Show the query: try another one, or copy this one into Edit Graph"
+                                onClick={() => setQueryOpen(!queryOpen)}
+                            >
+                                Query
+                            </button>
+                            {queryOpen && (
+                                <QueryBuilder value={activeQuery} onChange={changeQuery} />
+                            )}
+                        </>
+                    ) : savedQuery ? (
                         <span className="qb-fixed" title="Change it in Edit Graph">
                             {savedQuery}
                         </span>
                     ) : (
-                        <>
-                            <QueryBuilder value={activeQuery} onChange={changeQuery} />
-                            {embedded && (
-                                <button
-                                    type="button"
-                                    className="qb-close"
-                                    aria-label="Close the query builder"
-                                    onClick={() => setQueryOpen(false)}
-                                >
-                                    {'×'}
-                                </button>
-                            )}
-                        </>
+                        <QueryBuilder value={activeQuery} onChange={changeQuery} />
                     )}
                 </div>
                 {!embedded && (
@@ -2109,63 +2273,62 @@ function TimeseriesAlternative() {
                         />
                     </div>
                 )}
-            </div>
-            {embedded && queryOpen && (
-                <div className="query-notes">
-                    <p className="query-note">
-                        Not saved. Press the {'</>'} button, select the text and copy it into Edit
-                        Graph to keep it.
-                    </p>
-                    {viewText && (
-                        <p className="query-note view-note">
-                            Starting view
-                            <input
-                                className="view-code"
-                                readOnly
-                                aria-label="Starting view, to copy into Edit Graph"
-                                value={viewText}
-                                size={viewText.length}
-                                onClick={(event) => event.currentTarget.select()}
-                                onFocus={(event) => event.currentTarget.select()}
-                            />
-                            click it, copy it into &quot;Starting view&quot; in Edit Graph
+                {embedded && queryOpen && (
+                    <div className="query-notes">
+                        <p className="query-note">
+                            Not saved. Press the {'</>'} button, select the text and copy it into
+                            Edit Graph to keep it.
                         </p>
-                    )}
-                </div>
-            )}
+                        {viewText && (
+                            <p className="query-note view-note">
+                                Starting view
+                                <input
+                                    className="view-code"
+                                    readOnly
+                                    aria-label="Starting view, to copy into Edit Graph"
+                                    value={viewText}
+                                    size={viewText.length}
+                                    onClick={(event) => event.currentTarget.select()}
+                                    onFocus={(event) => event.currentTarget.select()}
+                                />
+                                click it, copy it into &quot;Starting view&quot; in Edit Graph
+                            </p>
+                        )}
+                    </div>
+                )}
+            </div>
             {needsSetup && (
                 <p className="setup-note">
-                    Set the metrics query in Edit Graph, so every device shows the same chart. Click
-                    &quot;Set a query&quot; at the top left to build one.
+                    Set the metrics query in Edit Graph, so every device shows the same chart. Press
+                    &quot;Query&quot; at the top left to build one.
                 </p>
             )}
 
-            {/* Bottom right: how the chart is drawn and viewed. */}
+            {/* Bottom right. On its own the whole menu is there; on a widget, which is small,
+                what is used all the time stays and the rest is in the Options panel. */}
             <div className="bar tools">
                 <div className="group">
-                    <>
-                        <button
-                            type="button"
-                            className={stackedNow ? 'on' : ''}
-                            title={embedded ? 'Edit Graph gives the starting point' : undefined}
-                            onClick={toggleStacked}
-                        >
-                            Stack
-                        </button>
-                        <select
-                            aria-label="Sort order"
-                            value={shownOrder}
-                            onChange={(event) => changeOrder(event.target.value)}
-                        >
-                            {orderOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </>
+                    <button
+                        type="button"
+                        className={stackedNow ? 'on' : ''}
+                        title={embedded ? 'Edit Graph gives the starting point' : undefined}
+                        onClick={toggleStacked}
+                    >
+                        Stack
+                    </button>
                     {!embedded && (
                         <>
+                            <select
+                                aria-label="Sort order"
+                                value={shownOrder}
+                                onChange={(event) => changeOrder(event.target.value)}
+                            >
+                                {orderOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
                             <select
                                 aria-label="Number of series"
                                 value={limit}
@@ -2190,19 +2353,19 @@ function TimeseriesAlternative() {
                     <button type="button" className={sound ? 'on' : ''} onClick={toggleSound}>
                         Sound
                     </button>
-                    <button
-                        type="button"
-                        className={spinNow ? 'on' : ''}
-                        onClick={() => {
-                            setSpin(!spinNow);
-                        }}
-                    >
-                        Spin
-                    </button>
+                    {!embedded && (
+                        <button
+                            type="button"
+                            className={spinNow ? 'on' : ''}
+                            onClick={() => setSpin(!spinNow)}
+                        >
+                            Spin
+                        </button>
+                    )}
                     <button type="button" onClick={() => rendererRef.current?.resetView()}>
                         Reset view
                     </button>
-                    {native && (
+                    {!embedded && native && (
                         <button
                             type="button"
                             disabled={!ready}
@@ -2214,6 +2377,17 @@ function TimeseriesAlternative() {
                             Image
                         </button>
                     )}
+                    {embedded && (
+                        <button
+                            type="button"
+                            className={optionsOpen ? 'on' : ''}
+                            aria-label="Options"
+                            title="Options: sort, spin, colour, image"
+                            onClick={() => setOptionsOpen(!optionsOpen)}
+                        >
+                            Options
+                        </button>
+                    )}
                     <button
                         type="button"
                         className="info"
@@ -2223,6 +2397,47 @@ function TimeseriesAlternative() {
                     >
                         i
                     </button>
+                    {embedded && optionsOpen && (
+                        <div className="picker options" role="dialog" aria-label="Options">
+                            <label className="option-row">
+                                Sort
+                                <select
+                                    aria-label="Sort order"
+                                    value={shownOrder}
+                                    onChange={(event) => changeOrder(event.target.value)}
+                                >
+                                    {orderOptions.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label.replace('Sort: ', '')}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <div className="option-row">
+                                Spin
+                                <button
+                                    type="button"
+                                    className={spinNow ? 'on' : ''}
+                                    onClick={() => setSpin(!spinNow)}
+                                >
+                                    {spinNow ? 'On' : 'Off'}
+                                </button>
+                            </div>
+                            <BackgroundPicker value={backgroundNow} onPick={setPickedBackground} />
+                            {native && (
+                                <button
+                                    type="button"
+                                    disabled={!ready}
+                                    title="Show the chart as an image to save"
+                                    onClick={() => {
+                                        captureRequestedRef.current = true;
+                                    }}
+                                >
+                                    Save as image
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 

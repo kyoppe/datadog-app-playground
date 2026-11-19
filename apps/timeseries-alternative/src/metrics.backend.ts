@@ -51,6 +51,18 @@ function rollupIntervalMs(series: { interval?: number; pointlist?: number[][] }[
     return declared > 0 ? declared * 1000 : 0;
 }
 
+// How the points of one column are combined: as the query combines them in time. `.as_count()` and
+// `.rollup(sum, ...)` add up (a count of events per column), `.rollup(max|min, ...)` take the
+// largest or smallest, and anything else is the average, Datadog's default.
+function timeCombine(query: string): 'avg' | 'sum' | 'min' | 'max' {
+    const rollup = /\.rollup\(\s*(sum|count|min|max|avg)/i.exec(query);
+    if (rollup) {
+        const method = rollup[1].toLowerCase();
+        return method === 'count' ? 'sum' : (method as 'avg' | 'sum' | 'min' | 'max');
+    }
+    return /\.as_count\(\)/i.test(query) ? 'sum' : 'avg';
+}
+
 function failed(query: string, error: string): MetricGrid {
     return { query, fromMs: 0, toMs: 0, times: [], series: [], hidden: 0, unit: '', error };
 }
@@ -122,6 +134,7 @@ export async function queryMetricGrid(
         );
     }
 
+    const combine = timeCombine(text);
     const intervalMs = rollupIntervalMs(response.series ?? []);
     const bucketMs =
         intervalMs > 0
@@ -137,6 +150,8 @@ export async function queryMetricGrid(
     const all = (response.series ?? []).map((series) => {
         const sums = new Array<number>(count).fill(0);
         const counts = new Array<number>(count).fill(0);
+        const lows = new Array<number>(count).fill(Infinity);
+        const highs = new Array<number>(count).fill(-Infinity);
         for (const point of series.pointlist ?? []) {
             const [time, value] = point;
             if (typeof time !== 'number' || typeof value !== 'number' || !Number.isFinite(value)) {
@@ -146,9 +161,26 @@ export async function queryMetricGrid(
             if (index >= 0 && index < count) {
                 sums[index] += value;
                 counts[index] += 1;
+                lows[index] = Math.min(lows[index], value);
+                highs[index] = Math.max(highs[index], value);
             }
         }
-        const values = sums.map((sum, index) => (counts[index] > 0 ? sum / counts[index] : null));
+        // Points that fall into one column are combined the way the query combines them in time.
+        const values = sums.map((sum, index) => {
+            if (counts[index] === 0) {
+                return null;
+            }
+            if (combine === 'sum') {
+                return sum;
+            }
+            if (combine === 'min') {
+                return lows[index];
+            }
+            if (combine === 'max') {
+                return highs[index];
+            }
+            return sum / counts[index];
+        });
         // the value of each tag, without its key: "host:web-1" is shown as "web-1"
         const tagSet = series.tag_set ?? [];
         const tags = tagSet
