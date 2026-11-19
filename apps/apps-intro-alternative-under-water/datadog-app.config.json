@@ -2,6 +2,6 @@
   "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
   "datadogSite": "datadoghq.com",
   "id": "3d6338f7-a41a-4b6f-9e0e-b3b374f553c3",
-  "name": "Datadog Apps Playground",
+  "name": "Apps Intro Alternative - Under Water",
   "tags": []
 }
