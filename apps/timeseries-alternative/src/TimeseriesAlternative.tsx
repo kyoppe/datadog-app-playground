@@ -393,6 +393,7 @@ function TimeseriesAlternative() {
     const [queryTouched, setQueryTouched] = useState(false);
     const [queryOpen, setQueryOpen] = useState(false);
     const [optionsOpen, setOptionsOpen] = useState(false);
+    const [pointerOver, setPointerOver] = useState(false);
     const [viewText, setViewText] = useState('');
     const [limit, setLimit] = useState(initial.limit);
     const [order, setOrder] = useState(initial.order);
@@ -461,6 +462,29 @@ function TimeseriesAlternative() {
     // device sees the same chart); there is no query bar, and a widget without one says so.
     const needsSetup =
         embedded && parameters.status === 'ready' && savedQuery === '' && !queryTouched;
+
+    // On a widget the menus are out of the way until the pointer comes over it (or while one of
+    // them is in use, or there is nothing to see yet).
+    useEffect(() => {
+        if (!embedded) {
+            return;
+        }
+        const root = document.documentElement;
+        const over = () => setPointerOver(true);
+        const out = () => setPointerOver(false);
+        root.addEventListener('pointerenter', over);
+        root.addEventListener('pointermove', over);
+        root.addEventListener('pointerdown', over);
+        root.addEventListener('pointerleave', out);
+        return () => {
+            root.removeEventListener('pointerenter', over);
+            root.removeEventListener('pointermove', over);
+            root.removeEventListener('pointerdown', over);
+            root.removeEventListener('pointerleave', out);
+        };
+    }, [embedded]);
+    const quiet =
+        embedded && !pointerOver && !queryOpen && !optionsOpen && !guideOpen && !needsSetup;
 
     const gridQuery = useQuery({
         queryKey: [
@@ -1698,6 +1722,18 @@ function TimeseriesAlternative() {
                     border-color: rgba(255, 140, 140, 0.5);
                 }
 
+                .bar {
+                    transition: opacity 0.25s ease;
+                }
+
+                .bar.quiet {
+                    opacity: 0;
+                }
+
+                .bar.quiet .group {
+                    pointer-events: none;
+                }
+
                 .bar.stack {
                     flex-direction: column;
                     align-items: flex-start;
@@ -2238,7 +2274,7 @@ function TimeseriesAlternative() {
 
             {/* Top: the query on the left, which grows with what is in it and wraps only when it
                 would run into the time selector, and the time selector on its own on the right. */}
-            <div className={`bar${embedded ? ' stack' : ''}`}>
+            <div className={`bar${embedded ? ' stack' : ''}${quiet ? ' quiet' : ''}`}>
                 <div className="group query-group">
                     {embedded ? (
                         <>
@@ -2306,7 +2342,7 @@ function TimeseriesAlternative() {
 
             {/* Bottom right. On its own the whole menu is there; on a widget, which is small,
                 what is used all the time stays and the rest is in the Options panel. */}
-            <div className="bar tools">
+            <div className={`bar tools${quiet ? ' quiet' : ''}`}>
                 <div className="group">
                     <button
                         type="button"

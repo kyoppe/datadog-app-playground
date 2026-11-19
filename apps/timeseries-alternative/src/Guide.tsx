@@ -26,7 +26,7 @@ const SECTIONS: { title: string; lines: string[]; hot?: boolean }[] = [
         hot: true,
         lines: [
             'Add the app to a dashboard as a widget. Open Edit Graph to set its query, Top N, Stacked, Sort order, Spin, Alert, Starting view and Background. They are saved with the widget, so every device shows the same chart, and two widgets can chart two metrics.',
-            "The widget follows the dashboard's own time selector. Press Query at the top left to open the query builder: try a query (not saved), switch to </> and copy the text into Edit Graph. Stack, and Sort and Spin (in Options), stay for trying things out (not saved).",
+            "The widget shows its menus only while the pointer is over it. The widget follows the dashboard's own time selector. Press Query at the top left to open the query builder: try a query (not saved), switch to </> and copy the text into Edit Graph. Stack, and Sort and Spin (in Options), stay for trying things out (not saved).",
             'Starting view: turn and zoom the board the way you want it to open, then press Query at the top left and copy the "Starting view" code shown there (for example 0,48,1) into Edit Graph. The widget then opens at that angle and zoom on every device, and Reset view returns to it.',
             'Background: the colour behind the chart. Open Options and pick Color: choose one from the list (Transparent lets the dashboard show through) or click the color wheel, then copy the code shown there (#rrggbb, or transparent) into Edit Graph.',
         ],

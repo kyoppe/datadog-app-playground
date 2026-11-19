@@ -107,6 +107,9 @@ paste it into the **Starting view** setting in Edit Graph. From then on the widg
 angle and zoom on every device, and **Reset view** brings the board back to it. (`0,48,1` is the usual view: the turn in degrees, the tilt in
 degrees, and the zoom, where smaller is closer.)
 
+On a widget the menus (Query at the top left, the bar at the lower right) fade in when the pointer
+comes over it and out again when it leaves, so the chart is all there is.
+
 These are saved with that widget, so two widgets on one dashboard can show two different metrics,
 and every time the dashboard opens they are the same. The widget follows the dashboard's own time
 selector (live or fixed), so it shows no time frame box, no query bar, no Top N and no Alert box:
