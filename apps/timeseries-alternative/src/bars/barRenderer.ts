@@ -33,7 +33,7 @@ const INTRO_KEYS: [number, number, number, number, number][] = [
 const PITCH_MIN = 0.2;
 const PITCH_MAX = 1.22;
 const FOV = 30 * DEG;
-const ZOOM_MIN = 0.35;
+const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 2.5;
 const FLOATS = 16; // per instance
 const SLAB_T = 0.008; // slab thickness
@@ -854,7 +854,9 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     let hoverAmt = 0;
 
     function camTarget(): Vec3 {
-        return [introTx * boardHx, maxH * 0.3, 0];
+        // Close up, look at the roofs rather than the middle of the bars, so the camera stays above them.
+        const near = Math.min(1, Math.max(0, (0.6 - zoom) / 0.5));
+        return [introTx * boardHx, maxH * (0.3 + 0.62 * near), 0];
     }
 
     /** Distance at which the whole board plus the tallest building fits at the default pose. */
