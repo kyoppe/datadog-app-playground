@@ -853,10 +853,11 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     let hoverIdx = -1;
     let hoverAmt = 0;
 
-    // The closest the camera may come, as a zoom: it stays above the roofs of the tallest bars.
+    // The closest the camera may come, as a zoom: about the height of the tallest bars, so that it
+    // is above their roofs when looking down at a fair angle. It does not depend on the angle: tipping
+    // the board must not move the camera in and out.
     function minZoom() {
-        const elevation = Math.max(Math.sin(pitch), 0.35);
-        return Math.max(ZOOM_MIN, (maxH * 0.8) / elevation / Math.max(fitDist, 0.1));
+        return Math.max(ZOOM_MIN, (maxH * 1.05) / Math.max(fitDist, 0.1));
     }
 
     function camTarget(): Vec3 {
@@ -1007,8 +1008,7 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         }
 
         zoom += (zoomT - zoom) * (1 - Math.exp(-dt * 8));
-        // The turning point stays where it is; instead the camera is kept from sinking into the
-        // bars: how close it may come depends on how high it looks down from.
+        // The turning point stays where it is, and so does the closest the camera may come.
         zoom = Math.max(zoom, minZoom());
         if (introT >= 0) {
             if (p.down || resetting) {
