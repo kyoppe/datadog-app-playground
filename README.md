@@ -1,28 +1,21 @@
-# Apps Intro Alternative
+# Datadog App Playground
 
-A small Datadog App experiment built with React, TypeScript, HTML-in-Canvas, and WebGL.
+A collection of Datadog Apps experiments managed in one repository.
 
-It recreates the Datadog Apps Intro experience with interactive water, liquid glass, ink, and jelly effects. It is a demo and is not intended as a production use case.
+Each app lives in its own directory under [`apps/`](./apps/) and can be developed independently.
 
 ## Local development
 
 ```bash
-cd apps/apps-intro-alternative-under-water
+cd apps/<app-directory>
 npm install
-npm run dev -- --org <org-uuid>
+npm run dev
 ```
 
-## Verification
-
-```bash
-npm test
-npm run typecheck
-npm run lint
-npm run build
-```
+See each app's `package.json` for its available scripts.
 
 ## Datadog documentation
 
-- [Datadog Apps](https://docs.datadoghq.com/actions/datadog_apps/) - local development, upload, and publishing
-- [App Builder](https://docs.datadoghq.com/actions/app_builder/) - App Builder concepts and components
-- [React Renderer](https://docs.datadoghq.com/actions/app_builder/components/react_renderer/) - custom React UI in App Builder
+- [Datadog Apps](https://docs.datadoghq.com/actions/datadog_apps/)
+- [App Builder](https://docs.datadoghq.com/actions/app_builder/)
+- [React Renderer](https://docs.datadoghq.com/actions/app_builder/components/react_renderer/)

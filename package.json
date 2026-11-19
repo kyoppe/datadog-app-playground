@@ -3,11 +3,11 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "under-water:dev": "npm --prefix apps/apps-intro-alternative-under-water run dev",
-    "under-water:dev:verify": "npm --prefix apps/apps-intro-alternative-under-water run dev:verify",
-    "under-water:test": "npm --prefix apps/apps-intro-alternative-under-water run test",
-    "under-water:typecheck": "npm --prefix apps/apps-intro-alternative-under-water run typecheck",
-    "under-water:build": "npm --prefix apps/apps-intro-alternative-under-water run build",
-    "under-water:upload": "npm --prefix apps/apps-intro-alternative-under-water run upload"
+    "apps-intro:dev": "npm --prefix apps/apps-intro-alternative run dev",
+    "apps-intro:dev:verify": "npm --prefix apps/apps-intro-alternative run dev:verify",
+    "apps-intro:test": "npm --prefix apps/apps-intro-alternative run test",
+    "apps-intro:typecheck": "npm --prefix apps/apps-intro-alternative run typecheck",
+    "apps-intro:build": "npm --prefix apps/apps-intro-alternative run build",
+    "apps-intro:upload": "npm --prefix apps/apps-intro-alternative run upload"
   }
 }
