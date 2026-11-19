@@ -34,6 +34,13 @@ function parseQuery(query: string): Parts | null {
     };
 }
 
+// What the builder starts from when it is given a query it cannot show: the aggregation and the
+// metric at the front of it, if there are any.
+function builderStart(text: string): string {
+    const head = /^\s*(avg|sum|min|max):([A-Za-z0-9_.:-]+)/.exec(text);
+    return head ? `${head[1]}:${head[2]}{*}` : 'avg:system.cpu.user{*}';
+}
+
 function composeQuery({ agg, metric, filters, groups }: Parts) {
     const scope = filters.length > 0 ? filters.join(',') : '*';
     const by = groups.length > 0 ? ` by {${groups.join(',')}}` : '';
@@ -294,11 +301,22 @@ export function QueryBuilder({ value, onChange }: QueryBuilderProps) {
                 <button
                     type="button"
                     className="qb-toggle"
-                    title="Back to the query builder"
+                    title={
+                        parseQuery(rawText) === null
+                            ? 'Back to the query builder (what it cannot show is dropped)'
+                            : 'Back to the query builder'
+                    }
                     aria-label="Back to the query builder"
-                    disabled={parseQuery(rawText) === null}
                     onClick={() => {
-                        applyRaw();
+                        if (parseQuery(rawText) !== null) {
+                            applyRaw();
+                        } else {
+                            // The builder cannot show this query (a formula, a rollup...): start it
+                            // from the metric, so that a query can always be built again.
+                            const fallback = builderStart(rawText);
+                            setRawText(fallback);
+                            onChange(fallback);
+                        }
                         setRawMode(false);
                     }}
                 >
