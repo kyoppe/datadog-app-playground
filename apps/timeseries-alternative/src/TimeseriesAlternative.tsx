@@ -651,36 +651,34 @@ function TimeseriesAlternative() {
 
     // Sound for the chart moving. When the user changes something that reshapes the chart (the
     // query, the aggregation, the time frame), the new data lands as a clatter, rising or falling
-    // with the tallest bar. Fresh data from the live tail is a quiet chime instead.
-    const lastChimeRef = useRef('');
+    // with the tallest bar. Any other new data (the live tail) is a quiet chime. Data that is the
+    // same as before is not "new" (the query client hands back the same object for it), and
+    // sorting does not fetch anything, so it makes no sound here.
     const previousGridRef = useRef<MetricGrid | undefined>(undefined);
     useEffect(() => {
-        if (!grid) {
+        if (!rawGrid) {
             return;
         }
         const previous = previousGridRef.current;
-        previousGridRef.current = grid;
-        const chimeKey = `${grid.toMs}:${grid.series.length}`;
-        const fresh = chimeKey !== lastChimeRef.current;
-        lastChimeRef.current = chimeKey;
+        previousGridRef.current = rawGrid;
         const rows = (g: MetricGrid) => g.series.flatMap((row) => row.values.map((v) => v ?? 0));
-        const top = Math.max(...rows(grid), 1);
+        const top = Math.max(...rows(rawGrid), 1);
         if (movedByUserRef.current) {
             movedByUserRef.current = false;
             const rising =
                 limitRisingRef.current ?? (previous ? top >= Math.max(...rows(previous), 1) : true);
             limitRisingRef.current = null;
-            if (soundOnRef.current && previous && previous !== grid) {
+            if (soundOnRef.current && previous && previous !== rawGrid) {
                 soundRef.current?.clatter(rising);
             }
             return;
         }
-        if (!fresh || !previous || !soundOnRef.current) {
+        if (!previous || !soundOnRef.current) {
             return;
         }
-        const last = grid.series.map((row) => row.values[row.values.length - 1] ?? 0);
+        const last = rawGrid.series.map((row) => row.values[row.values.length - 1] ?? 0);
         soundRef.current?.chime(Math.max(...last) / top);
-    }, [grid]);
+    }, [rawGrid]);
 
     // ---- pointer ----------------------------------------------------------------------------
 

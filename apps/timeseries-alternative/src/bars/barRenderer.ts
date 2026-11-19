@@ -746,21 +746,13 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         // value / max (it is a sum), so scale by max(scene.max, largest column sum): a single
         // cell never exceeds maxH and a tower never does either.
         const colSum = new Float64Array(cols);
-        const colX0 = new Float64Array(cols).fill(Infinity);
-        const colX1 = new Float64Array(cols).fill(-Infinity);
-        let avgH = 0;
         for (let i = 0; i < n; i += 1) {
             const c = i % cols;
             const v = s.values[i];
             if (Number.isFinite(v)) {
                 colSum[c] += Math.max(0, v);
             }
-            const cell = s.cells[i];
-            colX0[c] = Math.min(colX0[c], cell.x);
-            colX1[c] = Math.max(colX1[c], cell.x + cell.w);
-            avgH += cell.h;
         }
-        avgH = n > 0 ? avgH / n : 0;
         let maxSum = 0;
         for (let c = 0; c < cols; c += 1) {
             maxSum = Math.max(maxSum, colSum[c]);
@@ -776,21 +768,17 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             const fin = Number.isFinite(v);
             const m = Math.min(cell.w, cell.h) * 0.1;
             const o = i * 6;
+            // the same box on the same cell as when it is not stacked (only the height differs)
+            nt[o] = (cell.x + cell.w / 2 - pw / 2) * sc;
+            nt[o + 1] = (cell.y + cell.h / 2 - ph / 2) * sc;
+            nt[o + 2] = Math.max(0.002, (cell.w / 2 - m) * sc);
+            nt[o + 3] = Math.max(0.002, (cell.h / 2 - m) * sc);
             if (stackedMode) {
-                const w = colX1[c] - colX0[c];
-                nt[o] = ((colX0[c] + colX1[c]) / 2 - pw / 2) * sc;
-                nt[o + 1] = 0;
-                nt[o + 2] = Math.max(0.002, (w / 2 - Math.min(w, avgH) * 0.1) * sc);
-                nt[o + 3] = 0.6 * avgH * sc;
                 const h = fin ? Math.max(0, v) * stackScale : 0;
                 nt[o + 4] = run[c];
                 nt[o + 5] = h;
                 run[c] += h;
             } else {
-                nt[o] = (cell.x + cell.w / 2 - pw / 2) * sc;
-                nt[o + 1] = (cell.y + cell.h / 2 - ph / 2) * sc;
-                nt[o + 2] = Math.max(0.002, (cell.w / 2 - m) * sc);
-                nt[o + 3] = Math.max(0.002, (cell.h / 2 - m) * sc);
                 nt[o + 4] = 0;
                 nt[o + 5] = fin ? Math.min(1, Math.max(0, v) / max) * maxH : 0;
             }
