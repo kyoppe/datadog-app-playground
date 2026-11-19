@@ -1682,6 +1682,76 @@ function TimeseriesAlternative() {
                     text-align: center;
                 }
 
+                /* The text is above the brush (which is above the cards' backgrounds). */
+                .guide-body h3,
+                .guide-body li {
+                    position: relative;
+                    z-index: 1;
+                }
+
+                .brush-filter {
+                    position: absolute;
+                }
+
+                .brush-layer {
+                    position: absolute;
+                    z-index: 0;
+                    top: 0;
+                    left: 0;
+                }
+
+                /* A stroke of a wide, dry brush: Datadog purple, with streaks and ragged ends. */
+                .brush {
+                    position: absolute;
+                    border-radius: 2px;
+                    background:
+                        repeating-linear-gradient(
+                            0deg,
+                            rgba(255, 255, 255, 0.16) 0 1px,
+                            rgba(30, 10, 70, 0.18) 1px 3px
+                        ),
+                        linear-gradient(180deg, #7c4dc8, #632ca6);
+                    filter: url(#guide-brush);
+                }
+
+                .guide.ghost {
+                    user-select: text;
+                }
+
+                .guide.settled ::selection {
+                    color: #ffffff;
+                    background: transparent;
+                }
+
+                /* the selected text, in the cloth's copy of the guide */
+                ::highlight(guide-sel) {
+                    color: #ffffff;
+                }
+
+                .guide section.hot {
+                    margin: 12px 0 4px;
+                    padding: 2px 14px 10px;
+                    border: 1px solid #cfc8ff;
+                    border-radius: 10px;
+                    background: #f3f1ff;
+                }
+
+                .guide section.hot h3 {
+                    margin-top: 10px;
+                    font-size: 13px;
+                }
+
+                .guide .badge {
+                    display: inline-block;
+                    margin-right: 8px;
+                    padding: 1px 8px;
+                    border-radius: 999px;
+                    color: #ffffff;
+                    background: #5b44c9;
+                    font-size: 10px;
+                    letter-spacing: 0.06em;
+                }
+
                 .setup-note {
                     position: fixed;
                     z-index: 6;
@@ -1905,6 +1975,7 @@ function TimeseriesAlternative() {
                 }
 
                 .guide-body {
+                    position: relative;
                     padding: 0 18px;
                     overflow: auto;
                 }
@@ -2008,7 +2079,7 @@ function TimeseriesAlternative() {
                             {activeQuery.trim() && !needsSetup ? activeQuery : 'Set a query'}
                         </button>
                     ) : savedQuery && !embedded ? (
-                        <span className="qb-fixed" title="Change it in the widget settings">
+                        <span className="qb-fixed" title="Change it in Edit Graph">
                             {savedQuery}
                         </span>
                     ) : (
@@ -2042,8 +2113,8 @@ function TimeseriesAlternative() {
             {embedded && queryOpen && (
                 <div className="query-notes">
                     <p className="query-note">
-                        Not saved. Press the {'</>'} button, select the text and copy it into this
-                        widget&apos;s settings (Edit Graph) to keep it.
+                        Not saved. Press the {'</>'} button, select the text and copy it into Edit
+                        Graph to keep it.
                     </p>
                     {viewText && (
                         <p className="query-note view-note">
@@ -2051,22 +2122,21 @@ function TimeseriesAlternative() {
                             <input
                                 className="view-code"
                                 readOnly
-                                aria-label="Starting view, to copy into the widget settings"
+                                aria-label="Starting view, to copy into Edit Graph"
                                 value={viewText}
                                 size={viewText.length}
                                 onClick={(event) => event.currentTarget.select()}
                                 onFocus={(event) => event.currentTarget.select()}
                             />
-                            click it, copy it into &quot;Starting view&quot; in the settings
+                            click it, copy it into &quot;Starting view&quot; in Edit Graph
                         </p>
                     )}
                 </div>
             )}
             {needsSetup && (
                 <p className="setup-note">
-                    Set the metrics query in this widget&apos;s settings (Edit Graph), so every
-                    device shows the same chart. Click &quot;Set a query&quot; at the top left to
-                    build one.
+                    Set the metrics query in Edit Graph, so every device shows the same chart. Click
+                    &quot;Set a query&quot; at the top left to build one.
                 </p>
             )}
 
@@ -2077,9 +2147,7 @@ function TimeseriesAlternative() {
                         <button
                             type="button"
                             className={stackedNow ? 'on' : ''}
-                            title={
-                                embedded ? 'The widget settings give the starting point' : undefined
-                            }
+                            title={embedded ? 'Edit Graph gives the starting point' : undefined}
                             onClick={toggleStacked}
                         >
                             Stack

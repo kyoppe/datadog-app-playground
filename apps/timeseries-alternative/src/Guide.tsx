@@ -15,13 +15,21 @@ import {
 // is plain HTML that simply appears.
 
 const REPOSITORY_URL = 'https://github.com/kyoppe/datadog-app-playground';
-const AUTHOR_NAME = 'Kyouhei';
 const AUTHOR_URL = 'https://dd.enterprise.slack.com/team/U03C6HE5LUV';
 const SWEEP_IN_SECONDS = 0.9;
 const SWEEP_OUT_SECONDS = 0.55;
 const MAX_CONSECUTIVE_PAINT_FAILURES = 3;
 
-const SECTIONS: { title: string; lines: string[] }[] = [
+const SECTIONS: { title: string; lines: string[]; hot?: boolean }[] = [
+    {
+        title: 'Use it on a dashboard',
+        hot: true,
+        lines: [
+            'Add the app to a dashboard as a widget. Open Edit Graph to set its query, Top N, Stacked, Sort order, Spin, Alert and Starting view. They are saved with the widget, so every device shows the same chart, and two widgets can chart two metrics.',
+            "The widget follows the dashboard's own time selector. Its query shows as a line of text at the top left: click it to open the query builder, try a query (not saved), switch to </> and copy the text into Edit Graph. The Stack, Sort and Spin buttons stay for trying things out (not saved).",
+            'Starting view: turn and zoom the board the way you want it to open, then click the query at the top left and copy the "Starting view" code shown there (for example 0,48,1) into Edit Graph. The widget then opens at that angle and zoom on every device.',
+        ],
+    },
     {
         title: 'The chart',
         lines: [
@@ -34,7 +42,7 @@ const SECTIONS: { title: string; lines: string[] }[] = [
         title: 'The query (top left)',
         lines: [
             'metric, from (filters), an aggregation, by (groups): pick from the lists as you type.',
-            "</> switches to plain query text, for example avg:system.cpu.user{env:prod} by {host}. Copy it into a widget's settings (Edit Graph) to use it on a dashboard.",
+            '</> switches to plain query text, for example avg:system.cpu.user{env:prod} by {host}. Copy it into Edit Graph to use it on a dashboard.',
         ],
     },
     {
@@ -58,17 +66,36 @@ const SECTIONS: { title: string; lines: string[] }[] = [
         title: 'The view',
         lines: ['Drag to turn the board. Scroll to zoom.'],
     },
-    {
-        title: 'On a dashboard',
-        lines: [
-            'Starting view: turn and zoom the board the way you want it to open, then click the query at the top left. The "Starting view" shown there (for example 0,48,1) can be copied into the widget settings (Edit Graph), so the widget opens at that angle and zoom on every device.',
-            'Add the app as a widget. Its query, number of series, stacked, spin and alert settings are set in the widget settings and saved with each widget (there is no query bar on a widget), so two widgets can chart two metrics.',
-            "The widget follows the dashboard's own time selector. It shows its query as a line of text, and has no Top N or Alert box: set those in the widget settings (click the query at the top left to open the builder, try a query and copy it there), which also give the starting Stack, Sort and Spin. The Stack, Sort and Spin buttons stay for trying things out (not saved).",
-        ],
-    },
 ];
 
+type Brush = { x: number; y: number; w: number; h: number };
+// A selected piece of text, found again in the cloth's copy of the guide by its path of child
+// indexes from the guide's body.
+type Mark = { path: number[]; start: number; end: number };
+
+function pathFrom(root: Node, node: Node): number[] {
+    const path: number[] = [];
+    for (let at: Node | null = node; at && at !== root; at = at.parentNode) {
+        const parent: Node | null = at.parentNode;
+        if (!parent) {
+            return [];
+        }
+        path.unshift(Array.prototype.indexOf.call(parent.childNodes, at));
+    }
+    return path;
+}
+
+function nodeAt(root: Node, path: number[]): Node | null {
+    let node: Node | null = root;
+    for (const index of path) {
+        node = node?.childNodes[index] ?? null;
+    }
+    return node;
+}
+
 type SheetProps = {
+    /** The marker strokes over the text the viewer has selected. */
+    brushes: Brush[];
     onClose: () => void;
     /** cloth: drawn into the canvas; ghost: over the cloth, invisible but takes the clicks;
      *  plain: ordinary HTML (no HTML-in-Canvas). */
@@ -76,7 +103,7 @@ type SheetProps = {
     sheetRef?: Ref<HTMLDivElement>;
 };
 
-function Sheet({ onClose, look, sheetRef }: SheetProps) {
+function Sheet({ onClose, look, sheetRef, brushes }: SheetProps) {
     return (
         <div
             className={`guide${look === 'cloth' ? '' : ` ${look === 'ghost' ? 'ghost' : 'settled'}`}`}
@@ -92,9 +119,45 @@ function Sheet({ onClose, look, sheetRef }: SheetProps) {
                 </button>
             </div>
             <div className="guide-body">
+                {/* the selection, drawn as strokes of a wide brush behind the text */}
+                <svg className="brush-filter" width="0" height="0" aria-hidden="true">
+                    <filter id="guide-brush" x="-6%" y="-40%" width="112%" height="180%">
+                        <feTurbulence
+                            type="fractalNoise"
+                            baseFrequency="0.012 0.9"
+                            numOctaves="2"
+                            seed="4"
+                            result="noise"
+                        />
+                        <feDisplacementMap
+                            in="SourceGraphic"
+                            in2="noise"
+                            scale="16"
+                            xChannelSelector="R"
+                            yChannelSelector="G"
+                        />
+                    </filter>
+                </svg>
+                <div className="brush-layer" aria-hidden="true">
+                    {brushes.map((brush, index) => (
+                        <span
+                            key={index}
+                            className="brush"
+                            style={{
+                                left: brush.x - 6,
+                                top: brush.y - 1,
+                                width: brush.w + 12,
+                                height: brush.h + 2,
+                            }}
+                        />
+                    ))}
+                </div>
                 {SECTIONS.map((section) => (
-                    <section key={section.title}>
-                        <h3>{section.title}</h3>
+                    <section key={section.title} className={section.hot ? 'hot' : undefined}>
+                        <h3>
+                            {section.hot && <span className="badge">Dashboard</span>}
+                            {section.title}
+                        </h3>
                         <ul>
                             {section.lines.map((line) => (
                                 <li key={line}>{line}</li>
@@ -108,9 +171,8 @@ function Sheet({ onClose, look, sheetRef }: SheetProps) {
                     Repository
                 </a>
                 <span className="guide-author">
-                    Author:{' '}
                     <a href={AUTHOR_URL} target="_blank" rel="noreferrer">
-                        {AUTHOR_NAME}
+                        Feedback here
                     </a>
                 </span>
             </div>
@@ -124,16 +186,51 @@ type CurtainProps = {
     onClose: () => void;
     /** The plain-HTML twin over the cloth: kept exactly where the cloth is drawn. */
     twinRef?: RefObject<HTMLDivElement | null>;
+    brushes: Brush[];
+    marks: Mark[];
 };
 
 // The guide drawn on a sheet of cloth: a full-window canvas with the guide as its child.
-function Curtain({ mode, onDone, onClose, twinRef }: CurtainProps) {
+function Curtain({ mode, onDone, onClose, twinRef, brushes, marks }: CurtainProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const sheetRef = useRef<HTMLDivElement>(null);
     const doneRef = useRef(onDone);
     useEffect(() => {
         doneRef.current = onDone;
     }, [onDone]);
+
+    // The selected text is white on the cloth: the same stretches of text in the cloth's copy of
+    // the guide are given to the browser's highlight registry, which the stylesheet colours.
+    useEffect(() => {
+        const registry = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
+        const Highlight = (window as unknown as { Highlight?: new (...ranges: Range[]) => unknown })
+            .Highlight;
+        const body = sheetRef.current?.querySelector('.guide-body');
+        if (!registry || !Highlight || !body) {
+            return;
+        }
+        const ranges: Range[] = [];
+        for (const mark of marks) {
+            const node = nodeAt(body, mark.path);
+            if (!node) {
+                continue;
+            }
+            try {
+                const range = document.createRange();
+                range.setStart(node, mark.start);
+                range.setEnd(node, mark.end);
+                ranges.push(range);
+            } catch {
+                // the text changed under it: leave it out
+            }
+        }
+        if (ranges.length > 0) {
+            registry.set('guide-sel', new Highlight(...ranges));
+        }
+        return () => {
+            registry.delete('guide-sel');
+        };
+    }, [marks]);
 
     useEffect(() => {
         const canvas = canvasRef.current as HtmlInCanvasElement | null;
@@ -296,7 +393,7 @@ function Curtain({ mode, onDone, onClose, twinRef }: CurtainProps) {
 
     return (
         <canvas className="curtain" ref={canvasRef}>
-            <Sheet onClose={onClose} look="cloth" sheetRef={sheetRef} />
+            <Sheet onClose={onClose} look="cloth" sheetRef={sheetRef} brushes={brushes} />
         </canvas>
     );
 }
@@ -327,6 +424,71 @@ export function Guide({ onClose }: GuideProps) {
     }, [requestClose]);
 
     const twinRef = useRef<HTMLDivElement>(null);
+
+    // What the viewer has selected in the guide, as boxes in the text's own coordinates (so they
+    // scroll with it). The selection itself is made on the plain HTML; the cloth shows it as
+    // brush strokes.
+    const [brushes, setBrushes] = useState<Brush[]>([]);
+    const [marks, setMarks] = useState<Mark[]>([]);
+    useEffect(() => {
+        const clear = () => {
+            setBrushes((now) => (now.length === 0 ? now : []));
+            setMarks((now) => (now.length === 0 ? now : []));
+        };
+        const update = () => {
+            const body = twinRef.current?.querySelector('.guide-body');
+            const selection = document.getSelection();
+            if (!body || !selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                clear();
+                return;
+            }
+            const range = selection.getRangeAt(0);
+            if (!body.contains(range.commonAncestorContainer)) {
+                clear();
+                return;
+            }
+            const origin = body.getBoundingClientRect();
+            // Only the text itself: the boxes of the elements around it (and the empty space
+            // beside a short line) are not part of what is selected.
+            const boxes: Brush[] = [];
+            const found: Mark[] = [];
+            const walker = document.createTreeWalker(
+                range.commonAncestorContainer,
+                NodeFilter.SHOW_TEXT,
+            );
+            for (let node = walker.currentNode; node; node = walker.nextNode() as Node) {
+                if (node.nodeType !== Node.TEXT_NODE || !range.intersectsNode(node)) {
+                    continue;
+                }
+                const text = node.textContent ?? '';
+                if (text.trim() === '') {
+                    continue;
+                }
+                const part = document.createRange();
+                part.setStart(node, node === range.startContainer ? range.startOffset : 0);
+                part.setEnd(node, node === range.endContainer ? range.endOffset : text.length);
+                found.push({
+                    path: pathFrom(body, node),
+                    start: part.startOffset,
+                    end: part.endOffset,
+                });
+                for (const rect of Array.from(part.getClientRects())) {
+                    if (rect.width > 1 && rect.height > 1) {
+                        boxes.push({
+                            x: rect.left - origin.left + body.scrollLeft,
+                            y: rect.top - origin.top + body.scrollTop,
+                            w: rect.width,
+                            h: rect.height,
+                        });
+                    }
+                }
+            }
+            setBrushes(boxes);
+            setMarks(found);
+        };
+        document.addEventListener('selectionchange', update);
+        return () => document.removeEventListener('selectionchange', update);
+    }, []);
     const arrived = useCallback(() => setPhase('open'), []);
 
     return (
@@ -341,13 +503,20 @@ export function Guide({ onClose }: GuideProps) {
                         onDone={phase === 'out' ? onClose : arrived}
                         onClose={requestClose}
                         twinRef={twinRef}
+                        brushes={brushes}
+                        marks={marks}
                     />
                     {phase === 'open' && (
-                        <Sheet onClose={requestClose} look="ghost" sheetRef={twinRef} />
+                        <Sheet
+                            onClose={requestClose}
+                            look="ghost"
+                            sheetRef={twinRef}
+                            brushes={[]}
+                        />
                     )}
                 </>
             ) : (
-                <Sheet onClose={requestClose} look="plain" />
+                <Sheet onClose={requestClose} look="plain" sheetRef={twinRef} brushes={brushes} />
             )}
         </div>
     );

@@ -30,8 +30,8 @@ It works like the query box of a Datadog Timeseries widget:
 - Pick another aggregation (`avg`, `sum`, `min`, `max`) from the box beside `by`.
 - `</>` turns the box into plain text, for anything the boxes cannot say, such as
   `avg:system.cpu.user{env:prod} by {host}`. A query that cannot be read is not sent, and the
-  message says where it goes wrong. The text is also what you copy into a widget's settings
-  (Edit Graph) to chart the same query on a dashboard.
+  message says where it goes wrong. The text is also what you copy into Edit Graph
+  to chart the same query on a dashboard.
 
 ## The time frame (top right)
 
@@ -70,14 +70,14 @@ address, so a link opens the same view.
 | **Spin** | Slowly turns the board. Dragging pauses it for a few seconds |
 | **Reset view** | Back to the starting angle |
 | **Image** | Shows the chart as a picture. Right-click it to save it (a page inside Datadog cannot use the clipboard) |
-| **ⓘ** | The short version of this guide, with links to the repository and the author |
+| **ⓘ** | The short version of this guide, with links to the repository and to send feedback (Slack) |
 
 **The view:** the chart opens with a close-up at the front corner, flies low along the bars, then pulls back to the usual view (touch it to take over). As a dashboard widget it simply appears, with no opening shot. Drag to turn the board, scroll to zoom. The angle and zoom you leave it at are remembered in your browser. Zoomed in, the board cannot be tipped flat: the view lifts by itself so the camera stays above the bars. It tips between nearly flat and nearly top-down
 but never goes beyond them, and you can go all the way round.
 
 ## On a dashboard
 
-Add the app to a dashboard as a widget. When you add or edit it, Datadog asks for:
+Add the app to a dashboard as a widget. Edit Graph asks for:
 
 | Setting | |
 | --- | --- |
@@ -133,7 +133,7 @@ npm run upload
 | `src/QueryBuilder.tsx`, `src/TimeFrameSelector.tsx` | The query and time frame boxes |
 | `src/timeFrame.ts`, `src/queryCheck.ts` | Reading typed time frames; checking queries and explaining errors |
 | `src/metrics.backend.ts`, `src/metricSearch.backend.ts` | Backend functions: run the query, complete names and tags |
-| `src/parameters.ts` | The widget's settings |
+| `src/parameters.ts` | What Edit Graph asks for on a widget |
 
 Backend functions are handed to React Query wrapped (`queryFn: () => fn()`), never bare: the app
 bridge cannot clone the `AbortSignal` React Query would pass them. A dashboard cannot be embedded in
