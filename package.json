@@ -22,6 +22,7 @@
     "@datadog/apps-frontend": ">=0.0.10 <0.1.0",
     "@datadog/druids": ">=0.1.1 <0.2.0",
     "@tanstack/react-query": "^5.104.1",
+    "html2canvas": "^1.4.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
