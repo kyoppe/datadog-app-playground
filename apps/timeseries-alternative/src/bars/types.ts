@@ -85,6 +85,8 @@ export interface BarRenderer {
     zoomBy(factor: number): void;
     /** Slowly spin the board like a turntable until the user drags or calls this with false. */
     setAutoRotate(on: boolean): void;
+    /** Whether the first data opens with the flying camera shot (on by default). */
+    setIntro(on: boolean): void;
     /**
      * Draw one frame to the default framebuffer. Returns the cell under the pointer, if any.
      * On return: framebuffer null bound, viewport (0, 0, canvas.width, canvas.height), BLEND /

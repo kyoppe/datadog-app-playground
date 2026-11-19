@@ -1404,6 +1404,11 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
                 zoomT = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomT * factor));
             }
         },
+        setIntro(on) {
+            if (introT < 0) {
+                introPending = on;
+            }
+        },
         setAutoRotate(on) {
             autoRotate = on;
             if (on) {

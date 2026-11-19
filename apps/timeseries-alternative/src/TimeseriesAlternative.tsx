@@ -76,15 +76,21 @@ const toRgb = (hex: string): [number, number, number] => [
     parseInt(hex.slice(5, 7), 16) / 255,
 ];
 
+// Two decimals at most: 0.7777777 does not fit a cell, and 0.78 says enough.
+function round2(value: number) {
+    return Math.round(value * 100) / 100;
+}
+
 function formatCell(value: number | null) {
-    return value === null || !Number.isFinite(value) ? '–' : compact.format(value);
+    return value === null || !Number.isFinite(value) ? '–' : compact.format(round2(value));
 }
 
 function formatFull(value: number | null, unit: string) {
     if (value === null || !Number.isFinite(value)) {
         return 'no data';
     }
-    return `${Number(value.toPrecision(4)).toLocaleString('en')}${unit ? ` ${unit}` : ''}`;
+    const shown = Math.abs(value) < 1000 ? round2(value) : Number(value.toPrecision(4));
+    return `${shown.toLocaleString('en')}${unit ? ` ${unit}` : ''}`;
 }
 
 // Column headings: the time of day (with seconds when the buckets are shorter than a minute: a
@@ -229,7 +235,7 @@ function MetricTable({ grid, tableRef, stacked }: MetricTableProps) {
                 {(stacked ? [] : series).map((row, rowIndex) => {
                     const color = ROW_COLORS[rowIndex % ROW_COLORS.length];
                     return (
-                        <tr key={row.name} style={{ height: rowHeight }}>
+                        <tr key={`${rowIndex}:${row.name}`} style={{ height: rowHeight }}>
                             <th className="name" style={{ borderLeftColor: color }}>
                                 <span>{row.name}</span>
                             </th>
@@ -847,6 +853,11 @@ function TimeseriesAlternative() {
     useEffect(() => {
         rendererRef.current?.setAutoRotate(spinNow);
     }, [spinNow, ready]);
+
+    // As a dashboard widget the chart is simply there: no opening shot.
+    useEffect(() => {
+        rendererRef.current?.setIntro(!embedded);
+    }, [embedded, ready]);
 
     useEffect(
         () => () => {
@@ -1781,7 +1792,7 @@ function TimeseriesAlternative() {
                         // Listed as they are stacked: the last series is on top.
                         .reverse()
                         .map(({ row, index }) => (
-                            <li key={row.name} title={row.name}>
+                            <li key={`${index}:${row.name}`} title={row.name}>
                                 <span
                                     className="swatch"
                                     style={{

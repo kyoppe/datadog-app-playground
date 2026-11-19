@@ -149,7 +149,10 @@ export async function queryMetricGrid(
             }
         }
         const values = sums.map((sum, index) => (counts[index] > 0 ? sum / counts[index] : null));
-        const tags = (series.tag_set ?? []).join(', ');
+        // the value of each tag, without its key: "host:web-1" is shown as "web-1"
+        const tags = (series.tag_set ?? [])
+            .map((tag) => (tag.includes(':') ? tag.slice(tag.indexOf(':') + 1) : tag))
+            .join(', ');
         const scope = series.scope && series.scope !== '*' ? series.scope : '';
         return {
             name: tags || scope || series.display_name || series.metric || 'series',
