@@ -20,7 +20,7 @@ const DEF_PITCH = 48 * DEG;
 // just above the bars, then out and up to the usual view. Per key: seconds, yaw (degrees from the
 // usual one), pitch (degrees), zoom (distance, small = close) and where the camera looks along the
 // board (a share of its half width).
-const INTRO_KEYS: [number, number, number, number, number][] = [
+const INTRO_PATH: [number, number, number, number, number][] = [
     [0, -58, 17, 0.28, -0.62],
     [1.0, -50, 15, 0.27, -0.5],
     [3.0, -4, 21, 0.3, 0.55],
@@ -857,6 +857,11 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     let resetting = false;
     // The opening shot: a close-up from the side that swings out to the usual view, slowly.
     let introPending = true;
+    // the opening shot's path: it ends at the home view
+    const INTRO_KEYS = INTRO_PATH.map(
+        (key) => [...key] as [number, number, number, number, number],
+    );
+    let home: { yaw: number; pitch: number; zoom: number } | null = null;
     let introT = -1; // seconds into the opening shot, -1 when it is not playing
     let introTx = 0; // where along the board the camera looks (a share of the half width)
     let yawT = DEF_YAW;
@@ -894,6 +899,17 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     // the board must not move the camera in and out.
     function minZoom() {
         return Math.max(ZOOM_MIN, (maxH * 1.05) / Math.max(fitDist, 0.1));
+    }
+
+    // start from the home view (no opening shot)
+    function applyHome() {
+        if (!home) {
+            return;
+        }
+        yaw = DEF_YAW + home.yaw;
+        pitch = home.pitch;
+        zoom = zoomT = home.zoom;
+        resetting = false;
     }
 
     function camTarget(): Vec3 {
@@ -1499,6 +1515,27 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         setIntro(on) {
             if (introT < 0) {
                 introPending = on;
+                if (!on && home) {
+                    applyHome();
+                }
+            }
+        },
+        getView() {
+            // not before the opening shot has played: the camera has not got anywhere yet
+            return introT >= 0 || introPending
+                ? null
+                : { yaw: wrapPi(yaw - DEF_YAW), pitch, zoom: zoomT };
+        },
+        setHomeView(view) {
+            const pitchNow = Math.min(PITCH_MAX, Math.max(PITCH_MIN, view.pitch));
+            const zoomNow = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, view.zoom));
+            home = { yaw: wrapPi(view.yaw), pitch: pitchNow, zoom: zoomNow };
+            const end = INTRO_KEYS[INTRO_KEYS.length - 1];
+            end[1] = home.yaw / DEG;
+            end[2] = home.pitch / DEG;
+            end[3] = home.zoom;
+            if (!introPending && introT < 0) {
+                applyHome();
             }
         },
         setAutoRotate(on) {

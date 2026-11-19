@@ -10,7 +10,7 @@ export const appParameters = defineDatadogAppParameters({
         type: 'string',
         label: 'Metrics query',
         description:
-            'For example avg:system.cpu.user{env:prod} by {host}. Leave empty to pick one in the widget itself (not saved).',
+            'For example avg:system.cpu.user{env:prod} by {host}. Build it in the app on its own (the query builder, then the </> button shows it as text), copy it and paste it here. The widget has no query bar: it charts this query.',
         default: '',
     },
     limit: {
@@ -26,6 +26,13 @@ export const appParameters = defineDatadogAppParameters({
         label: 'Stacked',
         description: 'Stack the series into one tower per time bucket.',
         default: false,
+    },
+    sort: {
+        type: 'string',
+        label: 'Sort order',
+        description:
+            'How the rows are ordered: value (highest first), value:asc (lowest first), or one of the tags the series are grouped by, such as host (A to Z) or host:desc (Z to A).',
+        default: 'value',
     },
     spin: {
         type: 'boolean',

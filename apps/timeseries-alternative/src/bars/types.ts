@@ -89,6 +89,10 @@ export interface BarRenderer {
     setAutoRotate(on: boolean): void;
     /** Whether the first data opens with the flying camera shot (on by default). */
     setIntro(on: boolean): void;
+    /** The angle and zoom the board is currently viewed at, or null while the opening shot plays. */
+    getView(): { yaw: number; pitch: number; zoom: number } | null;
+    /** Where the view starts (and where the opening shot ends). yaw is from the usual angle. */
+    setHomeView(view: { yaw: number; pitch: number; zoom: number }): void;
     /**
      * Draw one frame to the default framebuffer. Returns the cell under the pointer, if any.
      * On return: framebuffer null bound, viewport (0, 0, canvas.width, canvas.height), BLEND /

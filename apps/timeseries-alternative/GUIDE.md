@@ -30,7 +30,8 @@ It works like the query box of a Datadog Timeseries widget:
 - Pick another aggregation (`avg`, `sum`, `min`, `max`) from the box beside `by`.
 - `</>` turns the box into plain text, for anything the boxes cannot say, such as
   `avg:system.cpu.user{env:prod} by {host}`. A query that cannot be read is not sent, and the
-  message says where it goes wrong.
+  message says where it goes wrong. The text is also what you copy into a widget's settings
+  (Edit Graph) to chart the same query on a dashboard.
 
 ## The time frame (top right)
 
@@ -71,7 +72,7 @@ address, so a link opens the same view.
 | **Image** | Shows the chart as a picture. Right-click it to save it (a page inside Datadog cannot use the clipboard) |
 | **ⓘ** | The short version of this guide, with links to the repository and the author |
 
-**The view:** the chart opens with a close-up at the front corner, flies low along the bars, then pulls back to the usual view (touch it to take over). As a dashboard widget it simply appears, with no opening shot. Drag to turn the board, scroll to zoom. Zoomed in, the board cannot be tipped flat: the view lifts by itself so the camera stays above the bars. It tips between nearly flat and nearly top-down
+**The view:** the chart opens with a close-up at the front corner, flies low along the bars, then pulls back to the usual view (touch it to take over). As a dashboard widget it simply appears, with no opening shot. Drag to turn the board, scroll to zoom. The angle and zoom you leave it at are remembered in your browser. Zoomed in, the board cannot be tipped flat: the view lifts by itself so the camera stays above the bars. It tips between nearly flat and nearly top-down
 but never goes beyond them, and you can go all the way round.
 
 ## On a dashboard
@@ -80,16 +81,19 @@ Add the app to a dashboard as a widget. When you add or edit it, Datadog asks fo
 
 | Setting | |
 | --- | --- |
-| **Metrics query** | The query to chart. Empty means: pick one in the widget (not saved) |
+| **Metrics query** | The query to chart, saved with the widget, so every device shows the same chart. On the widget the query shows as a line of text at the top left; click it to open the query builder and try another (not saved): switch it to text with `</>`, select the text and copy it here |
 | **Number of series** | 5, 10, 25 or 50 |
 | **Stacked** | Stack the series |
+| **Sort order** | `value` (highest first), `value:asc`, or a group tag such as `host` or `host:desc` |
 | **Spin** | Slowly turn the board |
 | **Alert at or above** | The red-roof threshold; 0 is off |
 
 These are saved with that widget, so two widgets on one dashboard can show two different metrics,
 and every time the dashboard opens they are the same. The widget follows the dashboard's own time
-selector (live or fixed), so it shows no time frame box of its own. The chart's controls stay: view,
-Stack, Sound, Spin, Reset view.
+selector (live or fixed), so it shows no time frame box, no query bar, no Top N and no Alert box:
+those are set here. Stack, Sort and Spin start as set here, and their buttons stay on the widget
+for trying things out: what you press is not saved and is gone when the page is reloaded. Sound,
+Reset view and Image are the viewer's own.
 
 ## When something looks wrong
 

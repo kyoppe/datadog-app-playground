@@ -152,22 +152,43 @@ function sortSeries(grid: MetricGrid, order: string): MetricGrid {
     return { ...grid, series: rows };
 }
 
-// What the viewer last chose for themselves (not part of the shared link): Sound. It is kept in
-// the browser; where the browser refuses storage the button simply starts off.
+// The sort order as the widget settings spell it: "value", "value:asc", "host", "host:desc".
+function parseSortSetting(text: string): string {
+    const clean = text.trim();
+    const desc = clean.endsWith(':desc');
+    const asc = clean.endsWith(':asc');
+    const name = clean.replace(/:(asc|desc)$/, '');
+    if (name === '' || name.toLowerCase() === 'value') {
+        return asc ? 'va' : DEFAULT_ORDER;
+    }
+    return `tag:${name}:${desc ? 'd' : 'a'}`;
+}
+
+// What the viewer last chose for themselves (not part of the shared link): Sound, and the view
+// (angle and zoom) the board was last left in. It is kept in the browser; where the browser refuses storage the button simply starts off.
 const PREFS_KEY = 'timeseries-alternative:prefs';
 
-function readPrefs(): { sound: boolean } {
+type SavedView = { yaw: number; pitch: number; zoom: number };
+type Prefs = { sound: boolean; view: SavedView | null };
+
+function readPrefs(): Prefs {
     try {
         const saved = JSON.parse(window.localStorage.getItem(PREFS_KEY) ?? '{}');
-        return { sound: saved?.sound === true };
+        const v = saved?.view;
+        const view =
+            v && [v.yaw, v.pitch, v.zoom].every((n) => typeof n === 'number' && Number.isFinite(n))
+                ? { yaw: v.yaw, pitch: v.pitch, zoom: v.zoom }
+                : null;
+        return { sound: saved?.sound === true, view };
     } catch {
-        return { sound: false };
+        return { sound: false, view: null };
     }
 }
 
-function writePrefs(prefs: { sound: boolean }) {
+// Changes only the parts given: Sound and the view are saved at different moments.
+function writePrefs(change: Partial<Prefs>) {
     try {
-        window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+        window.localStorage.setItem(PREFS_KEY, JSON.stringify({ ...readPrefs(), ...change }));
     } catch {
         // no storage: nothing to remember
     }
@@ -338,6 +359,12 @@ function TimeseriesAlternative() {
     const [query, setQuery] = useState(initial.query);
     const [frame, setFrame] = useState<TimeFrame>(initial.frame);
     const [stacked, setStacked] = useState(initial.stacked);
+    // On a widget the settings give the starting point; pressing the button overrides it for as
+    // long as the page is open (it is not saved).
+    const [stackTouched, setStackTouched] = useState(false);
+    const [orderTouched, setOrderTouched] = useState(false);
+    const [queryTouched, setQueryTouched] = useState(false);
+    const [queryOpen, setQueryOpen] = useState(false);
     const [limit, setLimit] = useState(initial.limit);
     const [order, setOrder] = useState(initial.order);
     const [live, setLive] = useState(true);
@@ -366,8 +393,10 @@ function TimeseriesAlternative() {
     const savedQuery = parameters.status === 'ready' ? parameters.values.query.trim() : '';
     const savedStacked = parameters.status === 'ready' && parameters.values.stacked;
     const savedAlert = parameters.status === 'ready' ? parameters.values.alertAt : 0;
-    const activeQuery = savedQuery || query;
-    const stackedNow = savedStacked || stacked;
+    // On a widget the query is the one in its settings, until the viewer opens the Query panel and
+    // builds another there (to try it, or to copy it into the settings: it is not saved).
+    const activeQuery = embedded && !queryTouched ? savedQuery || query : query;
+    const stackedNow = embedded ? (stackTouched ? stacked : savedStacked) : stacked;
     // Spin as set in the widget's settings, until the viewer presses the button.
     const savedSpin = parameters.status === 'ready' && parameters.values.spin;
     const spinNow = spin ?? savedSpin;
@@ -387,6 +416,23 @@ function TimeseriesAlternative() {
     const settled =
         gaveUpWaiting || (parameters.status !== 'pending' && dashboardInput.status !== 'pending');
 
+    // What the chart shows changed without the viewer pressing anything here (the dashboard's time
+    // selector, the widget's settings): the bars rearrange all the same.
+    const motionKey = `${activeQuery}|${frameKey(activeFrame)}|${limitNow}`;
+    const lastMotionKeyRef = useRef(motionKey);
+    useEffect(() => {
+        if (lastMotionKeyRef.current !== motionKey) {
+            lastMotionKeyRef.current = motionKey;
+            movedByUserRef.current = true;
+            scrambleRef.current = Date.now();
+        }
+    }, [motionKey]);
+
+    // As a widget the query comes from the widget's settings (saved with the widget, so every
+    // device sees the same chart); there is no query bar, and a widget without one says so.
+    const needsSetup =
+        embedded && parameters.status === 'ready' && savedQuery === '' && !queryTouched;
+
     const gridQuery = useQuery({
         queryKey: [
             'grid',
@@ -395,7 +441,7 @@ function TimeseriesAlternative() {
             isLive ? 'live' : pausedEnd,
             limitNow,
         ],
-        enabled: settled,
+        enabled: settled && !needsSetup,
         // Wrapped: React Query hands its callback an AbortSignal, which the app bridge cannot clone.
         queryFn: () => {
             const request = requestFor(activeFrame, isLive, pausedEnd, Date.now());
@@ -412,9 +458,12 @@ function TimeseriesAlternative() {
         retry: false,
     });
     const rawGrid = gridQuery.data && !gridQuery.data.error ? gridQuery.data : undefined;
+    // On a widget the order comes from its settings; on its own, from the Sort box.
+    const savedSort = parameters.status === 'ready' ? parameters.values.sort : 'value';
+    const orderNow = embedded && !orderTouched ? parseSortSetting(savedSort) : order;
     const grid = useMemo(
-        () => (rawGrid ? sortSeries(rawGrid, order) : undefined),
-        [rawGrid, order],
+        () => (rawGrid ? sortSeries(rawGrid, orderNow) : undefined),
+        [rawGrid, orderNow],
     );
     // the tags the series are grouped by, to sort on
     const tagKeys = useMemo(() => {
@@ -436,8 +485,8 @@ function TimeseriesAlternative() {
             { value: `tag:${key}:d`, label: `Sort: ${key} Z→A` },
         ]),
     ];
-    const shownOrder = orderOptions.some((option) => option.value === order)
-        ? order
+    const shownOrder = orderOptions.some((option) => option.value === orderNow)
+        ? orderNow
         : DEFAULT_ORDER;
     const errorText =
         gridQuery.data?.error ??
@@ -468,6 +517,7 @@ function TimeseriesAlternative() {
         movedByUserRef.current = true;
         scrambleRef.current = Date.now();
         setQuery(next);
+        setQueryTouched(true);
         writeUrlState({ query: next, frameText: frame.text, stacked, limit, order });
     };
 
@@ -489,24 +539,44 @@ function TimeseriesAlternative() {
         writeUrlState({ query, frameText: frame.text, stacked, limit: next, order });
     };
 
+    const lastSortRef = useRef(orderNow);
     const changeOrder = (next: string) => {
         scrambleRef.current = Date.now();
         // the rows swap places at once (there is no new data to wait for): the same clatter
         if (soundOnRef.current && next !== shownOrder) {
             soundRef.current?.clatter(next === 'va' || next.endsWith(':d'));
         }
+        lastSortRef.current = next; // this change has its sound already
         setOrder(next);
+        setOrderTouched(true);
         writeUrlState({ query, frameText: frame.text, stacked, limit, order: next });
     };
 
+    // The widget's sort setting was changed: the rows swap places at once, as with the Sort box.
+    // (a layout effect, so it is ready before the scene is measured for the new order)
+    useLayoutEffect(() => {
+        if (lastSortRef.current === orderNow) {
+            return;
+        }
+        lastSortRef.current = orderNow;
+        if (embedded) {
+            scrambleRef.current = Date.now();
+            if (soundOnRef.current) {
+                soundRef.current?.clatter(orderNow === 'va' || orderNow.endsWith(':d'));
+            }
+        }
+    }, [orderNow, embedded]);
+
     const toggleStacked = () => {
         scrambleRef.current = Date.now();
+        const next = !stackedNow;
         // blocks piling up, or scattering
         if (soundOnRef.current) {
-            soundRef.current?.clatter(!stacked);
+            soundRef.current?.clatter(next);
         }
-        setStacked(!stacked);
-        writeUrlState({ query, frameText: frame.text, stacked: !stacked, limit, order });
+        setStacked(next);
+        setStackTouched(true);
+        writeUrlState({ query, frameText: frame.text, stacked: next, limit, order });
     };
 
     // The live tail again, over a window of the same length.
@@ -944,10 +1014,41 @@ function TimeseriesAlternative() {
         rendererRef.current?.setAutoRotate(spinNow);
     }, [spinNow, ready]);
 
+    // The view the board was last left in is where the opening shot ends (or, with no opening
+    // shot, where the chart starts), and it is saved again as it changes.
+    useEffect(() => {
+        if (prefs.view) {
+            rendererRef.current?.setHomeView(prefs.view);
+        }
+    }, [prefs, ready]);
+
     // As a dashboard widget the chart is simply there: no opening shot.
     useEffect(() => {
         rendererRef.current?.setIntro(!embedded);
     }, [embedded, ready]);
+
+    useEffect(() => {
+        let saved = prefs.view;
+        const save = () => {
+            const view = rendererRef.current?.getView();
+            if (
+                view &&
+                (!saved ||
+                    Math.abs(view.yaw - saved.yaw) > 0.005 ||
+                    Math.abs(view.pitch - saved.pitch) > 0.005 ||
+                    Math.abs(view.zoom - saved.zoom) > 0.005)
+            ) {
+                saved = view;
+                writePrefs({ view });
+            }
+        };
+        const timer = window.setInterval(save, 1500);
+        window.addEventListener('pagehide', save);
+        return () => {
+            window.clearInterval(timer);
+            window.removeEventListener('pagehide', save);
+        };
+    }, [prefs]);
 
     useEffect(
         () => () => {
@@ -1384,6 +1485,25 @@ function TimeseriesAlternative() {
                     outline: 1px solid #ff8a8a;
                 }
 
+                .bar button.qb-fixed {
+                    height: 30px;
+                    border: 0;
+                    background: transparent;
+                    cursor: pointer;
+                    text-align: left;
+                }
+
+                .bar button.qb-fixed:hover {
+                    background: rgba(255, 255, 255, 0.08);
+                }
+
+                .qb-close {
+                    flex: none;
+                    width: 28px;
+                    padding: 0;
+                    font-size: 16px;
+                }
+
                 .qb-problem {
                     flex: 1 1 100%;
                     max-width: 420px;
@@ -1476,6 +1596,36 @@ function TimeseriesAlternative() {
                 .status.error {
                     color: #ffb3b3;
                     border-color: rgba(255, 140, 140, 0.5);
+                }
+
+                .query-note {
+                    position: fixed;
+                    z-index: 6;
+                    top: 62px;
+                    left: 12px;
+                    max-width: min(60vw, 520px);
+                    margin: 0;
+                    padding: 6px 10px;
+                    border-radius: 8px;
+                    color: #d6dafc;
+                    background: rgba(10, 14, 38, 0.8);
+                    font: 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif;
+                }
+
+                .setup-note {
+                    position: fixed;
+                    z-index: 6;
+                    top: 50%;
+                    left: 50%;
+                    max-width: min(80vw, 420px);
+                    margin: 0;
+                    padding: 12px 18px;
+                    border-radius: 12px;
+                    color: #d6dafc;
+                    background: rgba(10, 14, 38, 0.8);
+                    font: 13px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+                    text-align: center;
+                    transform: translate(-50%, -50%);
                 }
 
                 .notice {
@@ -1777,12 +1927,34 @@ function TimeseriesAlternative() {
                 would run into the time selector, and the time selector on its own on the right. */}
             <div className="bar">
                 <div className="group query-group">
-                    {savedQuery ? (
+                    {embedded && !queryOpen ? (
+                        // on a widget the query is a line of text; a click opens the builder
+                        <button
+                            type="button"
+                            className="qb-fixed qb-open"
+                            title="Click to build another query, or to copy this one (not saved)"
+                            onClick={() => setQueryOpen(true)}
+                        >
+                            {activeQuery.trim() && !needsSetup ? activeQuery : 'Set a query'}
+                        </button>
+                    ) : savedQuery && !embedded ? (
                         <span className="qb-fixed" title="Change it in the widget settings">
                             {savedQuery}
                         </span>
                     ) : (
-                        <QueryBuilder value={activeQuery} onChange={changeQuery} />
+                        <>
+                            <QueryBuilder value={activeQuery} onChange={changeQuery} />
+                            {embedded && (
+                                <button
+                                    type="button"
+                                    className="qb-close"
+                                    aria-label="Close the query builder"
+                                    onClick={() => setQueryOpen(false)}
+                                >
+                                    {'×'}
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
                 {!embedded && (
@@ -1797,30 +1969,46 @@ function TimeseriesAlternative() {
                     </div>
                 )}
             </div>
+            {embedded && queryOpen && (
+                <p className="query-note">
+                    Not saved. Press the {'</>'} button, select the text and copy it into this
+                    widget&apos;s settings (Edit Graph) to keep it.
+                </p>
+            )}
+            {needsSetup && (
+                <p className="setup-note">
+                    Set the metrics query in this widget&apos;s settings (Edit Graph), so every
+                    device shows the same chart. Click &quot;Set a query&quot; at the top left to
+                    build one.
+                </p>
+            )}
 
             {/* Bottom right: how the chart is drawn and viewed. */}
             <div className="bar tools">
                 <div className="group">
-                    <button
-                        type="button"
-                        className={stackedNow ? 'on' : ''}
-                        disabled={savedStacked}
-                        title={savedStacked ? 'Set in the widget settings' : undefined}
-                        onClick={toggleStacked}
-                    >
-                        Stack
-                    </button>
-                    <select
-                        aria-label="Sort order"
-                        value={shownOrder}
-                        onChange={(event) => changeOrder(event.target.value)}
-                    >
-                        {orderOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
+                    <>
+                        <button
+                            type="button"
+                            className={stackedNow ? 'on' : ''}
+                            title={
+                                embedded ? 'The widget settings give the starting point' : undefined
+                            }
+                            onClick={toggleStacked}
+                        >
+                            Stack
+                        </button>
+                        <select
+                            aria-label="Sort order"
+                            value={shownOrder}
+                            onChange={(event) => changeOrder(event.target.value)}
+                        >
+                            {orderOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </>
                     {!embedded && (
                         <>
                             <select

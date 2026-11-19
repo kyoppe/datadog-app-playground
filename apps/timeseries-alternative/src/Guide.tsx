@@ -34,7 +34,7 @@ const SECTIONS: { title: string; lines: string[] }[] = [
         title: 'The query (top left)',
         lines: [
             'metric, from (filters), an aggregation, by (groups): pick from the lists as you type.',
-            '</> switches to plain query text, for example avg:system.cpu.user{env:prod} by {host}.',
+            "</> switches to plain query text, for example avg:system.cpu.user{env:prod} by {host}. Copy it into a widget's settings (Edit Graph) to use it on a dashboard.",
         ],
     },
     {
@@ -61,8 +61,8 @@ const SECTIONS: { title: string; lines: string[] }[] = [
     {
         title: 'On a dashboard',
         lines: [
-            'Add the app as a widget. Its query, number of series, stacked and alert settings are saved with each widget, so two widgets can chart two metrics.',
-            "The widget follows the dashboard's own time selector.",
+            'Add the app as a widget. Its query, number of series, stacked, spin and alert settings are set in the widget settings and saved with each widget (there is no query bar on a widget), so two widgets can chart two metrics.',
+            "The widget follows the dashboard's own time selector. It shows its query as a line of text, and has no Top N or Alert box: set those in the widget settings (click the query at the top left to open the builder, try a query and copy it there), which also give the starting Stack, Sort and Spin. The Stack, Sort and Spin buttons stay for trying things out (not saved).",
         ],
     },
 ];
