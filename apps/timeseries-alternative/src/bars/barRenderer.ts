@@ -638,6 +638,7 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     let boardHz = 0.333; // where the board should be
     let boardHzCur = 0.333; // where it is drawn right now: it glides there
     let boardPlaced = false;
+    let boardWait = 0; // seconds before a shrinking board starts to glide
     let firstScene = true;
     let maxH = 0.1;
     let boardKey = '';
@@ -665,6 +666,10 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     // to the new depth instead of jumping: a quick ease, and the camera follows it.
     function glideBoard(dt: number) {
         if (boardHzCur === boardHz) {
+            return;
+        }
+        if (boardWait > 0) {
+            boardWait -= dt;
             return;
         }
         const next = boardHzCur + (boardHz - boardHzCur) * (1 - Math.exp(-dt / 0.11));
@@ -707,6 +712,11 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             }
         }
         setBoard(pw, ph, cellCount > 0 ? Math.round(cellSum / cellCount) : 0);
+        // When the board is to shrink (stacking), the bars scramble first and it follows once they
+        // have left; when it grows, it is there at once for the bars to land on.
+        if (s.playful && boardHz < boardHzCur - 1e-4) {
+            boardWait = 0.55;
+        }
         if (firstScene) {
             // The very first table is simply there; only later changes glide.
             firstScene = false;
