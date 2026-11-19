@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datadoghq.com",
+  "id": "74acd33c-e186-435b-8782-b14aaefbd6a9",
+  "name": "Timeseries Alternative",
+  "tags": []
+}
