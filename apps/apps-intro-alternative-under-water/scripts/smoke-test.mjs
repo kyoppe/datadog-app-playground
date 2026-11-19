@@ -8,7 +8,7 @@ const read = (relativePath) => readFile(join(appRoot, relativePath), 'utf8');
 
 const config = JSON.parse(await read('datadog-app.config.json'));
 assert.match(config.id, /^[0-9a-f-]{36}$/i, 'App ID must be a UUID');
-assert.equal(config.name, 'Apps Intro Alternative - Under Water');
+assert.equal(config.name, 'Apps Intro Alternative');
 
 const entrypoint = await read('src/HtmlCanvasArticle.tsx');
 assert.match(entrypoint, /requestPaint/);

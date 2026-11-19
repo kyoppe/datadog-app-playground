@@ -347,7 +347,9 @@ function HtmlCanvasArticle() {
                     if (activeId !== null && activeId !== 'water') {
                         // An effect that throws every frame is the likelier culprit.
                         failures = 0;
-                        setNotice(`${activeId} stopped rendering; switched back to Water.`);
+                        const label =
+                            EFFECTS.find((entry) => entry.id === activeId)?.label ?? activeId;
+                        setNotice(`${label} stopped rendering; switched back to Water.`);
                         requestedEffectRef.current = 'water';
                         setEffectId('water');
                     } else {
@@ -834,7 +836,7 @@ function HtmlCanvasArticle() {
                 .switcher {
                     position: fixed;
                     z-index: 6;
-                    top: 14px;
+                    top: 8px;
                     left: 50%;
                     display: flex;
                     gap: 4px;
@@ -869,7 +871,7 @@ function HtmlCanvasArticle() {
                 .notice {
                     position: fixed;
                     z-index: 6;
-                    top: 62px;
+                    top: 56px;
                     left: 50%;
                     max-width: min(560px, 90vw);
                     margin: 0;
