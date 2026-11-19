@@ -1010,6 +1010,17 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         zoom += (zoomT - zoom) * (1 - Math.exp(-dt * 8));
         // The turning point stays where it is, and so does the closest the camera may come.
         zoom = Math.max(zoom, minZoom());
+        // Close in, the board cannot be tipped so flat that the camera would sink into the bars:
+        // the lowest angle rises as the camera comes closer, and tipping (or zooming) past it
+        // lifts the view by itself.
+        if (introT < 0) {
+            const reach = (maxH * 0.78) / Math.max(fitDist * zoom, 0.05);
+            const lowest = Math.min(PITCH_MAX, Math.max(PITCH_MIN, Math.asin(Math.min(1, reach))));
+            if (pitch < lowest) {
+                pitch += (lowest - pitch) * (1 - Math.exp(-dt * 6));
+                pitchV = Math.max(pitchV, 0);
+            }
+        }
         if (introT >= 0) {
             if (p.down || resetting) {
                 introT = -1; // the viewer takes over: stay where the shot is

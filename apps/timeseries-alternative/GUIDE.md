@@ -70,7 +70,7 @@ address, so a link opens the same view.
 | **Image** | Shows the chart as a picture. Right-click it to save it (a page inside Datadog cannot use the clipboard) |
 | **ⓘ** | The short version of this guide, with links to the repository and the author |
 
-**The view:** the chart opens with a close-up at the front corner, flies low along the bars, then pulls back to the usual view (touch it to take over). As a dashboard widget it simply appears, with no opening shot. Drag to turn the board, scroll to zoom. It tips between nearly flat and nearly top-down
+**The view:** the chart opens with a close-up at the front corner, flies low along the bars, then pulls back to the usual view (touch it to take over). As a dashboard widget it simply appears, with no opening shot. Drag to turn the board, scroll to zoom. Zoomed in, the board cannot be tipped flat: the view lifts by itself so the camera stays above the bars. It tips between nearly flat and nearly top-down
 but never goes beyond them, and you can go all the way round.
 
 ## On a dashboard
