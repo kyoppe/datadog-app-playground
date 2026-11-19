@@ -33,7 +33,7 @@ const INTRO_KEYS: [number, number, number, number, number][] = [
 const PITCH_MIN = 0.2;
 const PITCH_MAX = 1.22;
 const FOV = 30 * DEG;
-const ZOOM_MIN = 0.1;
+const ZOOM_MIN = 0.14;
 const ZOOM_MAX = 2.5;
 const FLOATS = 16; // per instance
 const SLAB_T = 0.008; // slab thickness
@@ -853,10 +853,14 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     let hoverIdx = -1;
     let hoverAmt = 0;
 
+    // The closest the camera may come, as a zoom: it stays above the roofs of the tallest bars.
+    function minZoom() {
+        const elevation = Math.max(Math.sin(pitch), 0.35);
+        return Math.max(ZOOM_MIN, (maxH * 0.8) / elevation / Math.max(fitDist, 0.1));
+    }
+
     function camTarget(): Vec3 {
-        // Close up, look at the roofs rather than the middle of the bars, so the camera stays above them.
-        const near = Math.min(1, Math.max(0, (0.6 - zoom) / 0.5));
-        return [introTx * boardHx, maxH * (0.3 + 0.62 * near), 0];
+        return [introTx * boardHx, maxH * 0.3, 0];
     }
 
     /** Distance at which the whole board plus the tallest building fits at the default pose. */
@@ -1003,6 +1007,9 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         }
 
         zoom += (zoomT - zoom) * (1 - Math.exp(-dt * 8));
+        // The turning point stays where it is; instead the camera is kept from sinking into the
+        // bars: how close it may come depends on how high it looks down from.
+        zoom = Math.max(zoom, minZoom());
         if (introT >= 0) {
             if (p.down || resetting) {
                 introT = -1; // the viewer takes over: stay where the shot is
@@ -1403,7 +1410,7 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         zoomBy(factor) {
             if (Number.isFinite(factor) && factor > 0) {
                 introT = -1;
-                zoomT = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomT * factor));
+                zoomT = Math.min(ZOOM_MAX, Math.max(minZoom(), zoomT * factor));
             }
         },
         setIntro(on) {
