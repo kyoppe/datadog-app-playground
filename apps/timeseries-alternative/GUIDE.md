@@ -83,10 +83,19 @@ Add the app to a dashboard as a widget. When you add or edit it, Datadog asks fo
 | --- | --- |
 | **Metrics query** | The query to chart, saved with the widget, so every device shows the same chart. On the widget the query shows as a line of text at the top left; click it to open the query builder and try another (not saved): switch it to text with `</>`, select the text and copy it here |
 | **Number of series** | 5, 10, 25 or 50 |
+| **Starting view** | The angle and zoom the board starts at, as `turn,tilt,zoom` (`0,48,1` is the usual view). Click the query at the top left of the widget: the note under it shows the current view, ready to copy here. A viewer who has turned the board sees the view they left it in, until this setting is changed |
 | **Stacked** | Stack the series |
 | **Sort order** | `value` (highest first), `value:asc`, or a group tag such as `host` or `host:desc` |
 | **Spin** | Slowly turn the board |
 | **Alert at or above** | The red-roof threshold; 0 is off |
+
+### Starting view
+
+Turn and zoom the widget the way you want it to open, then click the query at the top left. The
+note under it shows the current view as a short code, for example `0,48,1`: click it, copy it, and
+paste it into the **Starting view** setting in Edit Graph. From then on the widget opens at that
+angle and zoom on every device. (`0,48,1` is the usual view: the turn in degrees, the tilt in
+degrees, and the zoom, where smaller is closer.)
 
 These are saved with that widget, so two widgets on one dashboard can show two different metrics,
 and every time the dashboard opens they are the same. The widget follows the dashboard's own time

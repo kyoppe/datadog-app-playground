@@ -168,7 +168,23 @@ function parseSortSetting(text: string): string {
 // (angle and zoom) the board was last left in. It is kept in the browser; where the browser refuses storage the button simply starts off.
 const PREFS_KEY = 'timeseries-alternative:prefs';
 
-type SavedView = { yaw: number; pitch: number; zoom: number };
+// base: the "Starting view" setting that was in force when this view was saved. A viewer's own
+// view is kept until the setting is changed, and then the new setting wins.
+type SavedView = { yaw: number; pitch: number; zoom: number; base?: string };
+
+// "turn,tilt,zoom" (degrees, degrees, distance) as the widget settings spell it.
+function parseViewSetting(text: string): SavedView | null {
+    const parts = text.split(',').map((part) => Number(part.trim()));
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) {
+        return null;
+    }
+    return { yaw: (parts[0] * Math.PI) / 180, pitch: (parts[1] * Math.PI) / 180, zoom: parts[2] };
+}
+
+function viewToText(view: SavedView): string {
+    const deg = (rad: number) => Math.round((rad * 180) / Math.PI);
+    return `${deg(view.yaw)},${deg(view.pitch)},${view.zoom.toFixed(2)}`;
+}
 type Prefs = { sound: boolean; view: SavedView | null };
 
 function readPrefs(): Prefs {
@@ -177,7 +193,12 @@ function readPrefs(): Prefs {
         const v = saved?.view;
         const view =
             v && [v.yaw, v.pitch, v.zoom].every((n) => typeof n === 'number' && Number.isFinite(n))
-                ? { yaw: v.yaw, pitch: v.pitch, zoom: v.zoom }
+                ? {
+                      yaw: v.yaw,
+                      pitch: v.pitch,
+                      zoom: v.zoom,
+                      base: typeof v.base === 'string' ? v.base : '',
+                  }
                 : null;
         return { sound: saved?.sound === true, view };
     } catch {
@@ -365,6 +386,7 @@ function TimeseriesAlternative() {
     const [orderTouched, setOrderTouched] = useState(false);
     const [queryTouched, setQueryTouched] = useState(false);
     const [queryOpen, setQueryOpen] = useState(false);
+    const [viewText, setViewText] = useState('');
     const [limit, setLimit] = useState(initial.limit);
     const [order, setOrder] = useState(initial.order);
     const [live, setLive] = useState(true);
@@ -1014,13 +1036,34 @@ function TimeseriesAlternative() {
         rendererRef.current?.setAutoRotate(spinNow);
     }, [spinNow, ready]);
 
-    // The view the board was last left in is where the opening shot ends (or, with no opening
-    // shot, where the chart starts), and it is saved again as it changes.
+    // The view the board starts at (where the opening shot ends): the one the viewer left it in,
+    // or, once the widget's "Starting view" setting is changed (or if they never turned it), the
+    // setting. It is saved again as it changes.
+    const viewSetting = parameters.status === 'ready' ? parameters.values.view.trim() : null;
     useEffect(() => {
-        if (prefs.view) {
-            rendererRef.current?.setHomeView(prefs.view);
+        if (viewSetting === null) {
+            return;
         }
-    }, [prefs, ready]);
+        const own = prefs.view && (prefs.view.base ?? '') === viewSetting ? prefs.view : null;
+        const view = own ?? parseViewSetting(viewSetting) ?? prefs.view;
+        if (view) {
+            rendererRef.current?.setHomeView(view);
+        }
+    }, [prefs, viewSetting, ready]);
+
+    // While the query panel is open on a widget, show the view as the setting spells it.
+    useEffect(() => {
+        if (!embedded || !queryOpen) {
+            return;
+        }
+        const read = () => {
+            const view = rendererRef.current?.getView();
+            setViewText(view ? viewToText(view) : '');
+        };
+        read();
+        const timer = window.setInterval(read, 500);
+        return () => window.clearInterval(timer);
+    }, [embedded, queryOpen]);
 
     // As a dashboard widget the chart is simply there: no opening shot.
     useEffect(() => {
@@ -1030,6 +1073,9 @@ function TimeseriesAlternative() {
     useEffect(() => {
         let saved = prefs.view;
         const save = () => {
+            if (viewSetting === null) {
+                return;
+            }
             const view = rendererRef.current?.getView();
             if (
                 view &&
@@ -1039,7 +1085,7 @@ function TimeseriesAlternative() {
                     Math.abs(view.zoom - saved.zoom) > 0.005)
             ) {
                 saved = view;
-                writePrefs({ view });
+                writePrefs({ view: { ...view, base: viewSetting ?? '' } });
             }
         };
         const timer = window.setInterval(save, 1500);
@@ -1048,7 +1094,7 @@ function TimeseriesAlternative() {
             window.clearInterval(timer);
             window.removeEventListener('pagehide', save);
         };
-    }, [prefs]);
+    }, [prefs, viewSetting]);
 
     useEffect(
         () => () => {
@@ -1598,18 +1644,42 @@ function TimeseriesAlternative() {
                     border-color: rgba(255, 140, 140, 0.5);
                 }
 
-                .query-note {
+                .query-notes {
                     position: fixed;
                     z-index: 6;
                     top: 62px;
                     left: 12px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 6px;
                     max-width: min(60vw, 520px);
+                }
+
+                .query-note {
                     margin: 0;
                     padding: 6px 10px;
                     border-radius: 8px;
                     color: #d6dafc;
                     background: rgba(10, 14, 38, 0.8);
                     font: 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif;
+                }
+
+                .view-note {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .view-code {
+                    height: 24px;
+                    border: 1px solid rgba(190, 180, 255, 0.4);
+                    border-radius: 6px;
+                    padding: 0 8px;
+                    color: #ffffff;
+                    background: rgba(255, 255, 255, 0.1);
+                    font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+                    text-align: center;
                 }
 
                 .setup-note {
@@ -1970,10 +2040,27 @@ function TimeseriesAlternative() {
                 )}
             </div>
             {embedded && queryOpen && (
-                <p className="query-note">
-                    Not saved. Press the {'</>'} button, select the text and copy it into this
-                    widget&apos;s settings (Edit Graph) to keep it.
-                </p>
+                <div className="query-notes">
+                    <p className="query-note">
+                        Not saved. Press the {'</>'} button, select the text and copy it into this
+                        widget&apos;s settings (Edit Graph) to keep it.
+                    </p>
+                    {viewText && (
+                        <p className="query-note view-note">
+                            Starting view
+                            <input
+                                className="view-code"
+                                readOnly
+                                aria-label="Starting view, to copy into the widget settings"
+                                value={viewText}
+                                size={viewText.length}
+                                onClick={(event) => event.currentTarget.select()}
+                                onFocus={(event) => event.currentTarget.select()}
+                            />
+                            click it, copy it into &quot;Starting view&quot; in the settings
+                        </p>
+                    )}
+                </div>
             )}
             {needsSetup && (
                 <p className="setup-note">
