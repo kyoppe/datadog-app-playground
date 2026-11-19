@@ -256,9 +256,21 @@ export function parseTimeFrame(input: string, now: number): TimeFrameResult {
     if (parts.length === 2) {
         const fromMs = parsePoint(parts[0], now);
         const toMs = parsePoint(parts[1], now);
-        return fromMs === null || toMs === null
-            ? bad
-            : check({ kind: 'fixed', text: raw, label: capitalise(raw), fromMs, toMs }, now);
+        if (fromMs === null || toMs === null) {
+            return bad;
+        }
+        // the two unix timestamps a window we made ourselves puts in the URL: read as a range
+        const stamps = /^\d{10,13}$/.test(parts[0]) && /^\d{10,13}$/.test(parts[1]);
+        return check(
+            {
+                kind: 'fixed',
+                text: raw,
+                label: stamps ? rangeLabel(fromMs, toMs) : capitalise(raw),
+                fromMs,
+                toMs,
+            },
+            now,
+        );
     }
     const only = parsePoint(text, now);
     if (only !== null && !/\d\s*(am|pm)|\d:\d/.test(text) && !/^\d{10,13}$/.test(text)) {

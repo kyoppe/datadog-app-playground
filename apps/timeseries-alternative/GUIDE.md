@@ -62,6 +62,7 @@ address, so a link opens the same view.
 | Control | What it does |
 | --- | --- |
 | **Stack** | One tower per time bucket with the series stacked inside it, as a stacked bar chart. The table shrinks to a Total row and a legend names the colours |
+| **Sort** | Orders the rows: by value (highest or lowest first), or by one of the tags the series are grouped by (A to Z, Z to A). The tag choices appear when the query has a `by {...}`. Top N still picks the strongest series; Sort only orders them. Kept in the link |
 | **Top 5 / 10 / 25 / 50** | How many series to draw. The rest are left out |
 | **Alert ≥** | Roofs at or above this value glow red |
 | **Sound** | (Remembered in your browser.) A short note when the pointer reaches a bar (higher for taller bars), a chime when new data arrives, a clatter of blocks whenever the chart moves because you Stack or un-Stack, change Top N, or change the query, aggregation or time frame |

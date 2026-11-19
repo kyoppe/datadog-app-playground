@@ -618,6 +618,13 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     // ---------------------------------------------------------- scene state
     let scene: BarScene | null = null;
     let count = 0;
+    // The playful rearranging: every bar that has to move waits a random moment, hops, and
+    // settles with a few bounces (a spring that is not quite damped).
+    let springing = false;
+    let vel = new Float32Array(0);
+    let delay = new Float32Array(0);
+    let springK = new Float32Array(0);
+    let springC = new Float32Array(0);
     let cur = new Float32Array(0); // per instance: cx, cz, hx, hz, base, height (animated)
     let tgt = new Float32Array(0);
     let inst = new Float32Array(0);
@@ -796,6 +803,31 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             nc[o + 3] = nt[o + 3];
             nc[o + 4] = nt[o + 4];
             nc[o + 5] = 0;
+        }
+        // the bars that have to move scramble: a random wait, a hop, a few bounces
+        if (s.playful) {
+            vel = new Float32Array(n * 6);
+            delay = new Float32Array(n);
+            springK = new Float32Array(n);
+            springC = new Float32Array(n);
+            for (let i = 0; i < n; i += 1) {
+                const o = i * 6;
+                let moves = false;
+                for (let j = 0; j < 6; j += 1) {
+                    if (Math.abs(nt[o + j] - nc[o + j]) > 1e-4) {
+                        moves = true;
+                    }
+                }
+                delay[i] = moves ? Math.random() * 0.45 : 0;
+                springK[i] = 120 + Math.random() * 110;
+                springC[i] = 2 * (0.17 + Math.random() * 0.15) * Math.sqrt(springK[i]);
+                // a hop as it starts, so the bars jump about before they settle
+                vel[o + 5] = moves ? (1.2 + Math.random() * 2.8) * maxH : 0;
+            }
+            springing = true;
+        }
+        if (!s.playful && vel.length !== n * 6) {
+            springing = false; // the bars it was for are gone
         }
         cur = nc;
         tgt = nt;
@@ -1061,7 +1093,42 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     function animate(dt: number) {
         const k = 1 - Math.exp(-dt / SETTLE_TAU);
         let changed = instDirty;
-        for (let i = 0; i < count * 6; i += 1) {
+        if (springing) {
+            let active = false;
+            const steps = Math.max(1, Math.ceil(dt / 0.008));
+            const h = dt / steps;
+            for (let i = 0; i < count; i += 1) {
+                if (delay[i] > 0) {
+                    delay[i] -= dt;
+                    active = true;
+                    continue;
+                }
+                for (let j = 0; j < 6; j += 1) {
+                    const idx = i * 6 + j;
+                    for (let step = 0; step < steps; step += 1) {
+                        // only the heights bounce; sideways (and the footprint) the bars glide in without overshoot
+                        const damping = j >= 4 ? springC[i] : 2 * Math.sqrt(springK[i]);
+                        const a = (tgt[idx] - cur[idx]) * springK[i] - vel[idx] * damping;
+                        vel[idx] += a * h;
+                        cur[idx] += vel[idx] * h;
+                    }
+                    if (j === 5 || j === 4) {
+                        cur[idx] = Math.max(0, cur[idx]); // never through the table
+                    } else if (j === 2 || j === 3) {
+                        cur[idx] = Math.max(0.002, cur[idx]);
+                    }
+                    if (Math.abs(tgt[idx] - cur[idx]) > 1e-5 || Math.abs(vel[idx]) > 1e-4) {
+                        active = true;
+                    } else {
+                        cur[idx] = tgt[idx];
+                        vel[idx] = 0;
+                    }
+                }
+            }
+            springing = active;
+            changed = true;
+        }
+        for (let i = 0; i < count * 6 && !springing; i += 1) {
             const d = tgt[i] - cur[i];
             if (d !== 0) {
                 if (Math.abs(d) < 1e-6) {

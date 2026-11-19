@@ -9,7 +9,7 @@ export type MetricGrid = {
     /** Start time of every bucket, ms since the epoch. */
     times: number[];
     /** One row per series, strongest first. null = no data in that bucket. */
-    series: { name: string; values: (number | null)[] }[];
+    series: { name: string; values: (number | null)[]; tags: Record<string, string> }[];
     /** How many weaker series were left out (only the strongest `limit` are shown). */
     hidden: number;
     /** Unit of the first series ("%", "B", ...), or an empty string. */
@@ -150,13 +150,23 @@ export async function queryMetricGrid(
         }
         const values = sums.map((sum, index) => (counts[index] > 0 ? sum / counts[index] : null));
         // the value of each tag, without its key: "host:web-1" is shown as "web-1"
-        const tags = (series.tag_set ?? [])
+        const tagSet = series.tag_set ?? [];
+        const tags = tagSet
             .map((tag) => (tag.includes(':') ? tag.slice(tag.indexOf(':') + 1) : tag))
             .join(', ');
+        // by key, for sorting by a group tag
+        const tagValues: Record<string, string> = {};
+        for (const tag of tagSet) {
+            const colon = tag.indexOf(':');
+            if (colon > 0) {
+                tagValues[tag.slice(0, colon)] = tag.slice(colon + 1);
+            }
+        }
         const scope = series.scope && series.scope !== '*' ? series.scope : '';
         return {
             name: tags || scope || series.display_name || series.metric || 'series',
             values,
+            tagValues,
             strength: values.reduce<number>((best, value) => Math.max(best, value ?? 0), 0),
             unit: series.unit?.find((entry) => entry?.short_name)?.short_name ?? '',
         };
@@ -193,7 +203,11 @@ export async function queryMetricGrid(
         fromMs,
         toMs,
         times,
-        series: all.slice(0, limit).map(({ name, values }) => ({ name, values })),
+        series: all.slice(0, limit).map(({ name, values, tagValues }) => ({
+            name,
+            values,
+            tags: tagValues,
+        })),
         hidden: Math.max(0, all.length - limit),
         unit: all[0]?.unit ?? '',
         error: null,

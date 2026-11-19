@@ -48,7 +48,8 @@ const SECTIONS: { title: string; lines: string[] }[] = [
         title: 'The tools (bottom right)',
         lines: [
             'Stack: one tower per time bucket, the series stacked inside it. (With Sound on, the chart clatters whenever it moves.)',
-            'Top 5 / 10 / 25 / 50: how many series to draw.',
+            'Sort: order the rows by value (highest or lowest first) or by one of the tags the series are grouped by (A to Z, Z to A).',
+            'Top 5 / 10 / 25 / 50: how many series to draw (the strongest ones; Sort only orders them).',
             'Alert: roofs at or above the value glow red.',
             'Sound, Spin, Reset view, and Image (the chart as a picture to save with a right-click).',
         ],
@@ -228,6 +229,12 @@ function Curtain({ mode, onDone, onClose, twinRef }: CurtainProps) {
                 const top = canvas.clientHeight * 0.07;
                 const twin = twinRef?.current;
                 if (twin) {
+                    // the twin is what is scrolled: the cloth shows the same part of the guide
+                    const mine = twin.querySelector('.guide-body');
+                    const theirs = sheet.querySelector('.guide-body');
+                    if (mine && theirs && theirs.scrollTop !== mine.scrollTop) {
+                        theirs.scrollTop = mine.scrollTop;
+                    }
                     // clicks must land where the cloth shows the links
                     twin.style.margin = '0';
                     twin.style.right = 'auto';

@@ -6,6 +6,7 @@ import {
     useCallback,
     useEffect,
     useLayoutEffect,
+    useMemo,
     useRef,
     useState,
     type PointerEvent,
@@ -123,6 +124,34 @@ function frameOrDefault(text: string, now: number): TimeFrame {
     throw new Error('The default time frame is invalid.');
 }
 
+// How the rows are ordered: by value (the strongest first, or last) or by one of the tags the
+// series are grouped by ("tag:<key>:a" A to Z, "tag:<key>:d" Z to A). The N strongest are still the
+// ones that are drawn; this only orders them.
+const DEFAULT_ORDER = 'vd';
+
+function sortSeries(grid: MetricGrid, order: string): MetricGrid {
+    if (order === DEFAULT_ORDER) {
+        return grid;
+    }
+    const rows = [...grid.series];
+    if (order === 'va') {
+        rows.reverse(); // the grid comes strongest first
+    } else if (order.startsWith('tag:')) {
+        const split = order.lastIndexOf(':');
+        const key = order.slice(4, split);
+        const sign = order.slice(split + 1) === 'd' ? -1 : 1;
+        rows.sort((a, b) => {
+            const x = a.tags[key];
+            const y = b.tags[key];
+            if (x === undefined || y === undefined) {
+                return x === y ? 0 : x === undefined ? 1 : -1; // a missing tag goes last
+            }
+            return sign * x.localeCompare(y, 'en', { numeric: true, sensitivity: 'base' });
+        });
+    }
+    return { ...grid, series: rows };
+}
+
 // What the viewer last chose for themselves (not part of the shared link): Sound. It is kept in
 // the browser; where the browser refuses storage the button simply starts off.
 const PREFS_KEY = 'timeseries-alternative:prefs';
@@ -149,6 +178,7 @@ function readUrlState() {
     const params = new URLSearchParams(window.location.search);
     const limit = Number(params.get('n'));
     return {
+        order: params.get('o') || DEFAULT_ORDER,
         query: params.get('q') || DEFAULT_QUERY,
         frame: frameOrDefault(params.get('t') ?? '', Date.now()),
         stacked: params.get('s') === '1',
@@ -156,9 +186,15 @@ function readUrlState() {
     };
 }
 
-type UrlState = { query: string; frameText: string; stacked: boolean; limit: number };
+type UrlState = {
+    query: string;
+    frameText: string;
+    stacked: boolean;
+    limit: number;
+    order: string;
+};
 
-function writeUrlState({ query, frameText, stacked, limit }: UrlState) {
+function writeUrlState({ query, frameText, stacked, limit, order }: UrlState) {
     try {
         const url = new URL(window.location.href);
         url.searchParams.set('q', query);
@@ -167,6 +203,11 @@ function writeUrlState({ query, frameText, stacked, limit }: UrlState) {
         }
         url.searchParams.delete('r');
         url.searchParams.set('n', String(limit));
+        if (order === DEFAULT_ORDER) {
+            url.searchParams.delete('o');
+        } else {
+            url.searchParams.set('o', order);
+        }
         if (stacked) {
             url.searchParams.set('s', '1');
         } else {
@@ -274,6 +315,8 @@ function TimeseriesAlternative() {
     const sceneVersionRef = useRef(0);
     const soundRef = useRef<Sound | null>(null);
     const movedByUserRef = useRef(false);
+    // The next scene is a rearrangement the viewer asked for: the bars scramble into place.
+    const scrambleRef = useRef(0); // when it was asked for (ms); it expires, in case nothing moves
     // Set when Top N was changed: the clatter goes by the number of series, not by the heights.
     const limitRisingRef = useRef<boolean | null>(null);
     const [prefs] = useState(readPrefs);
@@ -296,6 +339,7 @@ function TimeseriesAlternative() {
     const [frame, setFrame] = useState<TimeFrame>(initial.frame);
     const [stacked, setStacked] = useState(initial.stacked);
     const [limit, setLimit] = useState(initial.limit);
+    const [order, setOrder] = useState(initial.order);
     const [live, setLive] = useState(true);
     const [pausedEnd, setPausedEnd] = useState<number | null>(null);
     const [alertDraft, setAlertDraft] = useState('');
@@ -367,7 +411,34 @@ function TimeseriesAlternative() {
         placeholderData: keepPreviousData,
         retry: false,
     });
-    const grid = gridQuery.data && !gridQuery.data.error ? gridQuery.data : undefined;
+    const rawGrid = gridQuery.data && !gridQuery.data.error ? gridQuery.data : undefined;
+    const grid = useMemo(
+        () => (rawGrid ? sortSeries(rawGrid, order) : undefined),
+        [rawGrid, order],
+    );
+    // the tags the series are grouped by, to sort on
+    const tagKeys = useMemo(() => {
+        const keys: string[] = [];
+        for (const row of rawGrid?.series ?? []) {
+            for (const key of Object.keys(row.tags)) {
+                if (!keys.includes(key)) {
+                    keys.push(key);
+                }
+            }
+        }
+        return keys;
+    }, [rawGrid]);
+    const orderOptions = [
+        { value: 'vd', label: 'Sort: Value ↓' },
+        { value: 'va', label: 'Sort: Value ↑' },
+        ...tagKeys.flatMap((key) => [
+            { value: `tag:${key}:a`, label: `Sort: ${key} A→Z` },
+            { value: `tag:${key}:d`, label: `Sort: ${key} Z→A` },
+        ]),
+    ];
+    const shownOrder = orderOptions.some((option) => option.value === order)
+        ? order
+        : DEFAULT_ORDER;
     const errorText =
         gridQuery.data?.error ??
         (gridQuery.error instanceof Error ? gridQuery.error.message : null);
@@ -395,43 +466,58 @@ function TimeseriesAlternative() {
 
     const changeQuery = (next: string) => {
         movedByUserRef.current = true;
+        scrambleRef.current = Date.now();
         setQuery(next);
-        writeUrlState({ query: next, frameText: frame.text, stacked, limit });
+        writeUrlState({ query: next, frameText: frame.text, stacked, limit, order });
     };
 
     const changeFrame = (next: TimeFrame) => {
         movedByUserRef.current = true;
+        scrambleRef.current = Date.now();
         setFrame(next);
-        writeUrlState({ query, frameText: next.text, stacked, limit });
+        writeUrlState({ query, frameText: next.text, stacked, limit, order });
     };
 
     const changeLimit = (next: number) => {
         // the board grows or shrinks by rows: the clatter comes with the new data, when it moves
         if (next !== limit) {
             movedByUserRef.current = true;
+            scrambleRef.current = Date.now();
             limitRisingRef.current = next < limit;
         }
         setLimit(next);
-        writeUrlState({ query, frameText: frame.text, stacked, limit: next });
+        writeUrlState({ query, frameText: frame.text, stacked, limit: next, order });
+    };
+
+    const changeOrder = (next: string) => {
+        scrambleRef.current = Date.now();
+        // the rows swap places at once (there is no new data to wait for): the same clatter
+        if (soundOnRef.current && next !== shownOrder) {
+            soundRef.current?.clatter(next === 'va' || next.endsWith(':d'));
+        }
+        setOrder(next);
+        writeUrlState({ query, frameText: frame.text, stacked, limit, order: next });
     };
 
     const toggleStacked = () => {
+        scrambleRef.current = Date.now();
         // blocks piling up, or scattering
         if (soundOnRef.current) {
             soundRef.current?.clatter(!stacked);
         }
         setStacked(!stacked);
-        writeUrlState({ query, frameText: frame.text, stacked: !stacked, limit });
+        writeUrlState({ query, frameText: frame.text, stacked: !stacked, limit, order });
     };
 
     // The live tail again, over a window of the same length.
     const goLive = (seconds: number) => {
         movedByUserRef.current = true;
+        scrambleRef.current = Date.now();
         const next = slidingFrame(seconds);
         setFrame(next);
         setLive(true);
         setPausedEnd(null);
-        writeUrlState({ query, frameText: next.text, stacked, limit });
+        writeUrlState({ query, frameText: next.text, stacked, limit, order });
     };
 
     const toggleLive = () => {
@@ -458,10 +544,11 @@ function TimeseriesAlternative() {
         }
         const next = fixedFrame(toMs - length, toMs);
         movedByUserRef.current = true;
+        scrambleRef.current = Date.now();
         setFrame(next);
         setLive(false);
         setPausedEnd(null);
-        writeUrlState({ query, frameText: next.text, stacked, limit });
+        writeUrlState({ query, frameText: next.text, stacked, limit, order });
     };
 
     // A browser only lets a page make sound after the viewer has done something on it: when Sound
@@ -551,6 +638,7 @@ function TimeseriesAlternative() {
                 ),
                 alertAt,
                 stacked: stackedNow,
+                playful: Date.now() - scrambleRef.current < 10000,
             };
             sceneVersionRef.current += 1;
         };
@@ -759,6 +847,10 @@ function TimeseriesAlternative() {
                     appliedVersion = sceneVersionRef.current;
                     if (sceneRef.current) {
                         renderer.setScene(sceneRef.current);
+                        // the rearrangement has reached the renderer: it is not asked for twice
+                        if (sceneRef.current.playful) {
+                            scrambleRef.current = 0;
+                        }
                     }
                 }
 
@@ -1720,6 +1812,17 @@ function TimeseriesAlternative() {
                     >
                         Stack
                     </button>
+                    <select
+                        aria-label="Sort order"
+                        value={shownOrder}
+                        onChange={(event) => changeOrder(event.target.value)}
+                    >
+                        {orderOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
                     {!embedded && (
                         <>
                             <select
