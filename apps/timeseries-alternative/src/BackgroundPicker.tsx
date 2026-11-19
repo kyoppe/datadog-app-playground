@@ -75,10 +75,10 @@ export function BackgroundPicker({ value, onPick }: Props) {
             <button
                 type="button"
                 className={open ? 'on' : ''}
-                title="The colour behind the chart"
+                title="The background behind the chart: a colour, or transparent"
                 onClick={() => setOpen(!open)}
             >
-                Color
+                Background
             </button>
             {open && (
                 <div className="picker" role="dialog" aria-label="Background colour">

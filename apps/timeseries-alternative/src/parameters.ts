@@ -38,7 +38,7 @@ export const appParameters = defineDatadogAppParameters({
         type: 'string',
         label: 'Background',
         description:
-            'The colour behind the chart, as #rrggbb (for example #1d2342), or transparent (the dashboard shows through). Empty is the usual dark background. Open Options at the lower right of the widget, pick Color from the list or the colour wheel, and copy the code shown there.',
+            'The colour behind the chart, as #rrggbb (for example #1d2342), or transparent (the dashboard shows through). Empty is the usual dark background. Open Options at the lower right of the widget, pick Background from the list or the colour wheel, and copy the code shown there.',
         default: '',
     },
     view: {

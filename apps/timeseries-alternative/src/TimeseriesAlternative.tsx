@@ -263,7 +263,8 @@ function writeUrlState({ query, frameText, stacked, limit, order }: UrlState) {
     }
 }
 
-type Hover = { row: number; col: number; x: number; y: number };
+// x, y: where the bar's roof is on screen; px, py: where the pointer is
+type Hover = { row: number; col: number; x: number; y: number; px: number; py: number };
 
 type MetricTableProps = {
     grid: MetricGrid | undefined;
@@ -992,7 +993,14 @@ function TimeseriesAlternative() {
                         pointer,
                     });
                     const next = pick
-                        ? { row: pick.row, col: pick.col, x: pick.screenX, y: pick.screenY }
+                        ? {
+                              row: pick.row,
+                              col: pick.col,
+                              x: pick.screenX,
+                              y: pick.screenY,
+                              px: pointer.x,
+                              py: pointer.y,
+                          }
                         : null;
                     const changed =
                         (next === null) !== (lastHover === null) ||
@@ -1001,7 +1009,9 @@ function TimeseriesAlternative() {
                             (next.row !== lastHover.row ||
                                 next.col !== lastHover.col ||
                                 Math.abs(next.x - lastHover.x) > 2 ||
-                                Math.abs(next.y - lastHover.y) > 2));
+                                Math.abs(next.y - lastHover.y) > 2 ||
+                                Math.abs(next.px - lastHover.px) > 4 ||
+                                Math.abs(next.py - lastHover.py) > 4));
                     if (changed) {
                         const entered =
                             next !== null &&
@@ -1097,7 +1107,10 @@ function TimeseriesAlternative() {
     // The view the board starts at (where the opening shot ends): the one the viewer left it in,
     // or, once the widget's "Starting view" setting is changed (or if they never turned it), the
     // setting. It is saved again as it changes.
-    const viewSetting = parameters.status === 'ready' ? parameters.values.view.trim() : null;
+    // (Outside a widget the host may never say what the settings are: after a moment there are
+    // none, and the view the viewer left is used.)
+    const viewSetting =
+        parameters.status === 'ready' ? parameters.values.view.trim() : settled ? '' : null;
     useEffect(() => {
         if (viewSetting === null) {
             return;
@@ -2500,7 +2513,31 @@ function TimeseriesAlternative() {
                 </ul>
             )}
             {hover && hoveredSeries && (
-                <div className="tip" style={{ left: hover.x, top: hover.y - 10 }}>
+                // Above the bar's roof, but never off the widget. A bar can be taller than the
+                // widget (its roof is out of sight): then it is shown at the pointer. Near the
+                // top edge it goes below, and near the sides it is kept inside.
+                <div
+                    className="tip"
+                    style={(() => {
+                        const roofInSight =
+                            hover.x >= 0 &&
+                            hover.x <= window.innerWidth &&
+                            hover.y >= 0 &&
+                            hover.y <= window.innerHeight;
+                        const anchor = roofInSight
+                            ? { x: hover.x, y: hover.y }
+                            : { x: hover.px, y: hover.py };
+                        const below = anchor.y < 90;
+                        return {
+                            left: Math.min(
+                                Math.max(anchor.x, 90),
+                                Math.max(90, window.innerWidth - 90),
+                            ),
+                            top: below ? anchor.y + 24 : anchor.y - 10,
+                            transform: below ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
+                        };
+                    })()}
+                >
                     <b>{formatFull(hoveredValue, grid?.unit ?? '')}</b>
                     {hoveredSeries.name}
                     <br />

@@ -71,7 +71,7 @@ address, so a link opens the same view.
 | Control | What it does |
 | --- | --- |
 | **Stack** | One tower per time bucket with the series stacked inside it, as a stacked bar chart. The table shrinks to a Total row and a legend names the colours |
-| **Options** | Widget only. The widget's bar is short (Stack, Sound, Reset view); this opens a panel with Sort, Spin, Color and Save as image |
+| **Options** | Widget only. The widget's bar is short (Stack, Sound, Reset view); this opens a panel with Sort, Spin, Background and Save as image |
 | **Sort** | Orders the rows: by value (highest or lowest first), or by one of the tags the series are grouped by (A to Z, Z to A). The tag choices appear when the query has a `by {...}`. Top N still picks the strongest series; Sort only orders them. Kept in the link |
 | **Top 5 / 10 / 25 / 50** | How many series to draw. The rest are left out |
 | **Alert ≥** | Roofs at or above this value glow red |
@@ -93,7 +93,7 @@ Add the app to a dashboard as a widget. Edit Graph asks for:
 | **Metrics query** | The query to chart, saved with the widget, so every device shows the same chart. On the widget there is no query bar; press **Query** at the top left to open the query builder and try another (not saved): switch it to text with `</>`, select the text and copy it here |
 | **Number of series** | 5, 10, 25 or 50 |
 | **Starting view** | The angle and zoom the board starts at, as `turn,tilt,zoom` (`0,48,1` is the usual view). Press **Query** at the top left of the widget: the note under the query builder shows the current view, ready to copy here. A viewer who has turned the board sees the view they left it in, until this setting is changed |
-| **Background** | The colour behind the chart, as `#rrggbb`, or `transparent` (the dashboard shows through). Open **Options** at the lower right of the widget, pick **Colour** from the list or the colour wheel, and copy the code shown there. Empty is the usual dark background |
+| **Background** | The colour behind the chart, as `#rrggbb`, or `transparent` (the dashboard shows through). Open **Options** at the lower right of the widget, pick **Background** from the list or the colour wheel, and copy the code shown there. Empty is the usual dark background |
 | **Stacked** | Stack the series |
 | **Sort order** | `value` (highest first), `value:asc`, or a group tag such as `host` or `host:desc` |
 | **Spin** | Slowly turn the board |
