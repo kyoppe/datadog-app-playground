@@ -41,7 +41,7 @@ const SLAB_M = 0.018; // slab margin around the page
 // Every value above zero stands on a thin base of this height, so a small value is never invisible
 // and can still be pointed at. The heights are the base plus the value's share of the rest, so
 // 1 is always lower than 2, and 2 lower than 3 (a stacked tower keeps its segments proportional).
-const MIN_BAR_HEIGHT = 0.001;
+const MIN_BAR_HEIGHT = 0.0004;
 const SLAB_TOP = -0.002;
 const SETTLE_TAU = 0.1; // exponential smoothing time constant, about 0.3 s to settle
 const LIGHT = normalize3([-0.45, 0.8, 0.5]);
@@ -241,7 +241,7 @@ void main() {
     vCol = aCol.rgb;
     vUV = aUV;
     vInst = gl_InstanceID;
-    gl_Position = aA.y < 0.0003 ? vec4(2.0, 2.0, 2.0, 1.0) : uVP * vec4(p, 1.0);
+    gl_Position = aA.y < 0.0002 ? vec4(2.0, 2.0, 2.0, 1.0) : uVP * vec4(p, 1.0);
 }
 `;
 
@@ -1258,7 +1258,7 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         for (let i = 0; i < count; i += 1) {
             const o = i * 6;
             const h = cur[o + 5];
-            if (h < 0.0003) {
+            if (h < 0.0002) {
                 continue;
             }
             const lo: Vec3 = [cur[o] - cur[o + 2], cur[o + 4], cur[o + 1] - cur[o + 3]];
