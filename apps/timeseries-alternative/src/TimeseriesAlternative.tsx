@@ -761,6 +761,7 @@ function TimeseriesAlternative() {
                     toRgb(ROW_COLORS[index % ROW_COLORS.length]),
                 ),
                 alertAt,
+                partialColumns: grid.partial,
                 stacked: stackedNow,
                 playful: Date.now() - scrambleRef.current < 10000,
             };
@@ -2542,6 +2543,12 @@ function TimeseriesAlternative() {
                     {hoveredSeries.name}
                     <br />
                     {grid ? new Date(grid.times[hover.col]).toLocaleString('en-GB') : ''}
+                    {grid && hover.col >= grid.times.length - grid.partial && (
+                        <>
+                            <br />
+                            <i>Still collecting data: the value may grow</i>
+                        </>
+                    )}
                 </div>
             )}
             {status && (

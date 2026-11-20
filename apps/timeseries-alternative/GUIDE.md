@@ -16,6 +16,8 @@ dashboard as a widget.
   scale follows the data: when a taller value arrives, the others get shorter.
 - **Point at a bar** for its exact value, its series and its time. The number on its roof is the
   same value, rounded.
+- **White stripes** mark the newest column of a live chart: it is still collecting data, so its
+  values can still grow.
 
 ## The query (top left)
 
@@ -123,7 +125,8 @@ Reset view and Image are the viewer's own.
   the filters and the time frame.
 - **The table shows flat, with no 3D.** The browser has no HTML-in-Canvas (it needs Chrome 157+),
   or the GPU could not start the chart: the message in the bottom right says which.
-- **The newest column is missing.** A live tail leaves the newest bucket out until its data arrives.
+- **The newest column is striped, or looks short.** It is the stretch of time that is still going
+  on, so its values grow until it is over. It fills in on each refresh.
 
 ## For developers
 

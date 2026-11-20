@@ -14,6 +14,8 @@ export type MetricGrid = {
     hidden: number;
     /** Unit of the first series ("%", "B", ...), or an empty string. */
     unit: string;
+    /** How many of the newest columns are still collecting data (1 on a live tail, else 0); drawn striped. */
+    partial: number;
     /** Set when the query could not be run; the other fields are then empty. */
     error: string | null;
 };
@@ -64,7 +66,17 @@ function timeCombine(query: string): 'avg' | 'sum' | 'min' | 'max' {
 }
 
 function failed(query: string, error: string): MetricGrid {
-    return { query, fromMs: 0, toMs: 0, times: [], series: [], hidden: 0, unit: '', error };
+    return {
+        query,
+        fromMs: 0,
+        toMs: 0,
+        times: [],
+        series: [],
+        hidden: 0,
+        unit: '',
+        partial: 0,
+        error,
+    };
 }
 
 // Runs a Datadog metrics query (filters and group-bys included, e.g.
@@ -204,30 +216,9 @@ export async function queryMetricGrid(
         };
     });
 
-    // A live tail's newest buckets are often still filling: series that were reporting a moment ago
-    // have not reported in them yet. Leave such a bucket out rather than show gaps that are only
-    // a matter of timing. "A moment ago" is the three buckets before it, so that a series that
-    // stopped long ago does not keep hiding the newest data. At most two, so real gaps stay visible.
-    if (endMs === null) {
-        const reportingAt = (column: number) =>
-            column < 0 ? 0 : all.filter((row) => row.values[column] !== null).length;
-        for (let trimmed = 0; trimmed < 2 && times.length > 1; trimmed += 1) {
-            const last = times.length - 1;
-            const expected = Math.max(
-                reportingAt(last - 1),
-                reportingAt(last - 2),
-                reportingAt(last - 3),
-            );
-            const reporting = reportingAt(last);
-            if (reporting > 0 && reporting >= expected) {
-                break;
-            }
-            times.pop();
-            for (const row of all) {
-                row.values.pop();
-            }
-        }
-    }
+    // The newest bucket of a live tail reaches into the future, so it is still collecting data:
+    // it is kept but marked partial (drawn striped). Every older bucket is final.
+    const partial = endMs === null && toMs > now ? 1 : 0;
 
     all.sort((a, b) => b.strength - a.strength);
     return {
@@ -242,6 +233,7 @@ export async function queryMetricGrid(
         })),
         hidden: Math.max(0, all.length - limit),
         unit: all[0]?.unit ?? '',
+        partial,
         error: null,
     };
 }

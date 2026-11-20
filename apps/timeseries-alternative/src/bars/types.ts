@@ -30,6 +30,8 @@ export type BarScene = {
      * footprint (the column's x/width, centred vertically on the table).
      */
     stacked: boolean;
+    /** The newest this-many columns are still collecting data: their boxes are drawn striped. */
+    partialColumns?: number;
     /** The chart is being rearranged on purpose (not a live update): let the bars scramble. */
     playful?: boolean;
 };

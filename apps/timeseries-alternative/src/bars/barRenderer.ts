@@ -272,7 +272,8 @@ void main() {
     float top = vA.y;
     float alert = step(0.5, mod(vA.z, 2.0));
     float stk = step(1.5, mod(vA.z, 4.0));
-    float slab = step(3.5, vA.z);
+    float slab = step(3.5, mod(vA.z, 8.0));
+    float partial = step(7.5, vA.z);
     float hv = (vInst == uHover) ? uHoverAmt : 0.0;
     vec2 e2 = vec2(vRect.z - abs(vWorld.x - vRect.x), vRect.w - abs(vWorld.z - vRect.y));
     float edge = min(e2.x, e2.y);
@@ -323,6 +324,12 @@ void main() {
         res = res * (1.0 + 0.22 * hv) + 0.05 * hv;
         c = res;
     }
+    // a box that is still collecting data wears white diagonal stripes (as Datadog's own bars do);
+    // its roof stays plain, so the number on it can be read
+    float stripeT = (vWorld.x + vWorld.z + vWorld.y) / 0.014;
+    float stripeW = fwidth(stripeT);
+    float stripe = 1.0 - smoothstep(0.2 - stripeW, 0.2 + stripeW, abs(fract(stripeT) - 0.5));
+    c = mix(c, vec3(1.0), stripe * partial * step(n.y, 0.5) * 0.6);
     o = vec4(clamp(c, 0.0, 1.0), 1.0);
 }
 `;
@@ -801,7 +808,10 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             // statics
             const q = i * FLOATS;
             const rc = s.rowColors[row] ?? [0.6, 0.6, 0.7];
-            ni[q + 6] = (fin && v >= s.alertAt ? 1 : 0) + (stackedMode ? 2 : 0);
+            ni[q + 6] =
+                (fin && v >= s.alertAt ? 1 : 0) +
+                (stackedMode ? 2 : 0) +
+                (c >= cols - (s.partialColumns ?? 0) ? 8 : 0);
             ni[q + 8] = rc[0];
             ni[q + 9] = rc[1];
             ni[q + 10] = rc[2];
