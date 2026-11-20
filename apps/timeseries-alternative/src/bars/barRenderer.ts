@@ -38,13 +38,10 @@ const ZOOM_MAX = 2.5;
 const FLOATS = 16; // per instance
 const SLAB_T = 0.008; // slab thickness
 const SLAB_M = 0.018; // slab margin around the page
-// A cell with a value above zero always stands at least this tall, so a small value is never
-// invisible and can still be pointed at: about 40% of the box's width (a small block, not a flat
-// tile), at most a quarter of the tallest bar. A stacked tower that is thinner is stretched as a
-// whole, so its segments stay proportional to each other.
+// Every value above zero stands on a thin base of this height, so a small value is never invisible
+// and can still be pointed at. The heights are the base plus the value's share of the rest, so
+// 1 is always lower than 2, and 2 lower than 3 (a stacked tower keeps its segments proportional).
 const MIN_BAR_HEIGHT = 0.004;
-const MIN_BAR_OF_WIDTH = 0.4;
-const MIN_BAR_OF_MAX = 0.25;
 const SLAB_TOP = -0.002;
 const SETTLE_TAU = 0.1; // exponential smoothing time constant, about 0.3 s to settle
 const LIGHT = normalize3([-0.45, 0.8, 0.5]);
@@ -787,29 +784,8 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         for (let c = 0; c < cols; c += 1) {
             maxSum = Math.max(maxSum, colSum[c]);
         }
-        const stackScale = maxH / Math.max(max, maxSum, 1e-9);
+        const stackScale = (maxH - MIN_BAR_HEIGHT) / Math.max(max, maxSum, 1e-9);
         const run = new Float64Array(cols); // running base per column
-        // A tower that would be thinner than the minimum is stretched (all its segments together,
-        // so it stays proportional inside) up to the minimum height.
-        const lift = new Float64Array(cols).fill(1);
-        if (stackedMode) {
-            for (let c = 0; c < cols; c += 1) {
-                const cell = s.cells[c];
-                const tower = colSum[c] * stackScale;
-                if (cell && tower > 0) {
-                    const half = Math.max(
-                        0.002,
-                        (cell.w / 2 - Math.min(cell.w, cell.h) * 0.1) * sc,
-                    );
-                    const floor = Math.min(
-                        Math.max(MIN_BAR_HEIGHT, half * 2 * MIN_BAR_OF_WIDTH),
-                        maxH * MIN_BAR_OF_MAX,
-                    );
-                    lift[c] = Math.max(1, floor / tower);
-                }
-            }
-        }
-
         for (let i = 0; i < n; i += 1) {
             const cell = s.cells[i];
             const row = Math.floor(i / cols);
@@ -824,17 +800,21 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             nt[o + 2] = Math.max(0.002, (cell.w / 2 - m) * sc);
             nt[o + 3] = Math.max(0.002, (cell.h / 2 - m) * sc);
             if (stackedMode) {
-                const h = fin ? Math.max(0, v) * stackScale * lift[c] : 0;
+                // the tower is its base plus its total; each segment takes its share of that height
+                const h =
+                    fin && v > 0 && colSum[c] > 0
+                        ? (Math.max(0, v) / colSum[c]) * (MIN_BAR_HEIGHT + colSum[c] * stackScale)
+                        : 0;
                 nt[o + 4] = run[c];
                 nt[o + 5] = h;
                 run[c] += h;
             } else {
                 nt[o + 4] = 0;
-                const floor = Math.min(
-                    Math.max(MIN_BAR_HEIGHT, nt[o + 2] * 2 * MIN_BAR_OF_WIDTH),
-                    maxH * MIN_BAR_OF_MAX,
-                );
-                nt[o + 5] = fin ? (v > 0 ? Math.max(floor, Math.min(1, v / max) * maxH) : 0) : 0;
+                nt[o + 5] = fin
+                    ? v > 0
+                        ? MIN_BAR_HEIGHT + Math.min(1, v / max) * (maxH - MIN_BAR_HEIGHT)
+                        : 0
+                    : 0;
             }
             // statics
             const q = i * FLOATS;
