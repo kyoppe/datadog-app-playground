@@ -91,6 +91,15 @@ export interface BarRenderer {
     setResetView(view: { yaw: number; pitch: number; zoom: number } | null): void;
     /** Multiply the camera distance by `factor` (< 1 zooms in), clamped to a sane range. */
     zoomBy(factor: number): void;
+    /**
+     * Make the boxes of one series glow (and the others step back), or null to stop. Used for the
+     * legend; the renderer itself does the same for the row names and the times on the table.
+     */
+    setHighlight(row: number | null): void;
+    /** What keeps glowing (a row or a column, the other -1), or null for nothing. */
+    setPinned(target: { row: number; col: number } | null): void;
+    /** Called when a row name or a time on the table is clicked (not dragged). */
+    setLabelClickHandler(handler: ((target: { row: number; col: number }) => void) | null): void;
     /** Slowly spin the board like a turntable until the user drags or calls this with false. */
     setAutoRotate(on: boolean): void;
     /** Whether the first data opens with the flying camera shot (on by default). */

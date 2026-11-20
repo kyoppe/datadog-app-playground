@@ -37,6 +37,7 @@ const SECTIONS: { title: string; lines: string[]; hot?: boolean }[] = [
             'Rows are the series, strongest first. Columns are time, the oldest on the left.',
             "A bar's height is its value, from zero, relative to the tallest bar on screen.",
             'Point at a bar for its exact value, its series and its time.',
+            'Point at a series name (or its entry in the legend, when stacked) and its boxes glow; point at a time and the boxes of that time glow. Click to keep it glowing, click again to let go.',
             'White stripes mark the newest column of a live chart: it is still collecting data, so its values can still grow.',
         ],
     },

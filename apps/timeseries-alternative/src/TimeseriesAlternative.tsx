@@ -1105,6 +1105,46 @@ function TimeseriesAlternative() {
         rendererRef.current?.setAutoRotate(spinNow);
     }, [spinNow, ready]);
 
+    // What a click pinned (it keeps glowing, also while the board is turned): a series, by its
+    // name, or a time. Clicking it again lets it go.
+    const [pin, setPin] = useState<{ series: string } | { time: number } | null>(null);
+    const pinnedSeries = pin && 'series' in pin ? pin.series : null;
+    const pinTarget = useMemo(() => {
+        if (!grid || !pin) {
+            return null;
+        }
+        const row = 'series' in pin ? grid.series.findIndex((s) => s.name === pin.series) : -1;
+        const col = 'time' in pin ? grid.times.indexOf(pin.time) : -1;
+        return row >= 0 || col >= 0 ? { row, col } : null;
+    }, [grid, pin]);
+    useEffect(() => {
+        rendererRef.current?.setPinned(pinTarget);
+    }, [pinTarget, ready]);
+    const togglePin = (next: { series: string } | { time: number }) =>
+        setPin((current) => {
+            const same =
+                current !== null &&
+                ('series' in next
+                    ? 'series' in current && current.series === next.series
+                    : 'time' in current && current.time === next.time);
+            return same ? null : next;
+        });
+    useEffect(() => {
+        rendererRef.current?.setLabelClickHandler(({ row, col }) => {
+            const current = gridRef.current;
+            if (!current) {
+                return;
+            }
+            const name = row >= 0 ? current.series[row]?.name : undefined;
+            const time = col >= 0 ? current.times[col] : undefined;
+            if (name !== undefined) {
+                togglePin({ series: name });
+            } else if (time !== undefined) {
+                togglePin({ time });
+            }
+        });
+    }, [ready]);
+
     // The view the board starts at (where the opening shot ends): the one the viewer left it in,
     // or, once the widget's "Starting view" setting is changed (or if they never turned it), the
     // setting. It is saved again as it changes.
@@ -2093,10 +2133,37 @@ function TimeseriesAlternative() {
                     display: flex;
                     align-items: center;
                     gap: 8px;
-                    padding: 2px 0;
+                    margin: 0 -6px;
+                    padding: 2px 6px;
+                    border-radius: 6px;
+                    overflow: hidden;
+                    white-space: nowrap;
+                    cursor: pointer;
+                }
+
+                .legend .legend-name {
+                    min-width: 0;
                     overflow: hidden;
                     text-overflow: ellipsis;
-                    white-space: nowrap;
+                }
+
+                .legend li:hover {
+                    background: rgba(190, 180, 255, 0.2);
+                }
+
+                .legend li.pinned {
+                    background: rgba(190, 180, 255, 0.14);
+                }
+
+                .legend li.pinned::after {
+                    content: '✓';
+                    margin-left: auto;
+                    color: #ffffff;
+                }
+
+                .legend li:hover .swatch,
+                .legend li.pinned .swatch {
+                    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
                 }
 
                 .legend .swatch {
@@ -2508,14 +2575,21 @@ function TimeseriesAlternative() {
                         // Listed as they are stacked: the last series is on top.
                         .reverse()
                         .map(({ row, index }) => (
-                            <li key={`${index}:${row.name}`} title={row.name}>
+                            <li
+                                key={`${index}:${row.name}`}
+                                title={row.name}
+                                className={row.name === pinnedSeries ? 'pinned' : ''}
+                                onPointerEnter={() => rendererRef.current?.setHighlight(index)}
+                                onPointerLeave={() => rendererRef.current?.setHighlight(null)}
+                                onClick={() => togglePin({ series: row.name })}
+                            >
                                 <span
                                     className="swatch"
                                     style={{
                                         backgroundColor: ROW_COLORS[index % ROW_COLORS.length],
                                     }}
                                 />
-                                {row.name}
+                                <span className="legend-name">{row.name}</span>
                             </li>
                         ))}
                 </ul>

@@ -258,6 +258,10 @@ uniform vec3 uL;
 uniform float uTime;
 uniform float uHoverAmt;
 uniform int uHover;
+uniform int uCols;
+uniform int uHiRow;    // the row or the column the pointer is on the label of (-1: none)
+uniform int uHiCol;
+uniform float uHiAmt;
 uniform vec3 uLd;      // towards the shadow light
 out vec4 o;
 ${PAGE_TEX}
@@ -334,6 +338,16 @@ void main() {
     float stripeW = fwidth(stripeT);
     float stripe = 1.0 - smoothstep(0.2 - stripeW, 0.2 + stripeW, abs(fract(stripeT) - 0.5));
     c = mix(c, vec3(1.0), stripe * partial * step(n.y, 0.5) * 0.6);
+    // the series (or the time) the pointer is on the label of glows; the others step back
+    if ((uHiRow >= 0 || uHiCol >= 0) && slab < 0.5) {
+        int hrow = vInst / uCols;
+        int hcol = vInst - hrow * uCols;
+        bool on = (uHiRow < 0 || hrow == uHiRow) && (uHiCol < 0 || hcol == uHiCol);
+        float glow = on ? uHiAmt : 0.0;
+        float back = on ? 0.0 : uHiAmt;
+        c = mix(c, c * 0.42 + vec3(0.04), back * 0.75);
+        c = c * (1.0 + 0.3 * glow) + vec3(0.1 + 0.06 * sin(uTime * 6.0)) * glow;
+    }
     o = vec4(clamp(c, 0.0, 1.0), 1.0);
 }
 `;
@@ -935,6 +949,25 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
     };
     let hoverIdx = -1;
     let hoverAmt = 0;
+    // The glow of a series (its label, or its entry in the legend) or of a time (its label)
+    let extRow = -1; // set by the host (the legend)
+    let labelRow = -1; // what the pointer rests on (a label on the board)
+    let labelCol = -1;
+    let labelSince = 0;
+    let labelSeenKey = '';
+    // What is pinned (it keeps glowing until it is let go of) and the click that pins it
+    let pinRow = -1;
+    let pinCol = -1;
+    let labelClickHandler: ((target: { row: number; col: number }) => void) | null = null;
+    let clickWasDown = false;
+    let clickStartX = 0;
+    let clickStartY = 0;
+    let clickMoved = false;
+    let clickLast: { row: number; col: number } | null = null; // the label under the idle pointer
+    let clickTarget: { row: number; col: number } | null = null; // the label a press began on
+    let hiRow = -1; // what is drawn glowing; kept while it fades out
+    let hiCol = -1;
+    let hiAmt = 0;
 
     // The closest the camera may come, as a zoom: about the height of the tallest bars, so that it
     // is above their roofs when looking down at a fair angle. It does not depend on the angle: tipping
@@ -1309,6 +1342,60 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         };
     }
 
+    // The row name or the time the pointer is over on the board's table (the pointer's ray meets the
+    // table top, and the spot is looked up in the table's own layout). Not while the board is being
+    // dragged or spun, and not when a bar is under the pointer.
+    function pickLabel(frame: BarFrame, dragging: boolean, onBar: boolean, ignoreSpin = false) {
+        const p = frame.pointer;
+        const spinning = !ignoreSpin && autoRotate && frame.time >= autoRotateResumeAt;
+        if (!scene || dragging || spinning || onBar || introT >= 0 || !p.inside || count === 0) {
+            return null;
+        }
+        const nx = (p.x / frame.width) * 2 - 1;
+        const ny = 1 - (p.y / frame.height) * 2;
+        const { r0, r1, r2, eye, tanH, tanV } = camera;
+        const dy = r0[1] * nx * tanH + r1[1] * ny * tanV - r2[1];
+        if (dy > -1e-6) {
+            return null;
+        }
+        const t = -eye[1] / dy;
+        const hx = eye[0] + t * (r0[0] * nx * tanH + r1[0] * ny * tanV - r2[0]);
+        const hz = eye[2] + t * (r0[2] * nx * tanH + r1[2] * ny * tanV - r2[2]);
+        const pw = Math.max(1, scene.pageWidth);
+        const ph = Math.max(1, scene.pageHeight);
+        const X = hx * pw + pw / 2;
+        const Y = hz * pw + ph / 2;
+        if (X < 0 || X > pw || Y < 0 || Y > ph || scene.cols < 1) {
+            return null;
+        }
+        const lastRow = scene.stacked ? 0 : scene.rows - 1;
+        const first = scene.cells[0];
+        const last = scene.cells[lastRow * scene.cols];
+        if (!first || !last) {
+            return null;
+        }
+        // the row names: left of the first cell of a row
+        if (!scene.stacked && X < first.x) {
+            for (let r = 0; r < scene.rows; r += 1) {
+                const cell = scene.cells[r * scene.cols];
+                if (cell && Y >= cell.y && Y < cell.y + cell.h) {
+                    return { row: r, col: -1 };
+                }
+            }
+            return null;
+        }
+        // the times: below the last row of cells
+        if (Y >= last.y + last.h) {
+            for (let c = 0; c < scene.cols; c += 1) {
+                const cell = scene.cells[c];
+                if (cell && X >= cell.x && X < cell.x + cell.w) {
+                    return { row: -1, col: c };
+                }
+            }
+        }
+        return null;
+    }
+
     // ---------------------------------------------------------- drawing
 
     // The light's view: a box round the board and its tallest bars, seen along the light.
@@ -1431,6 +1518,10 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         gl.uniform1f(bu.uTime, frame.time);
         gl.uniform1f(bu.uHoverAmt, 0);
         gl.uniform1i(bu.uHover, -1);
+        gl.uniform1i(bu.uHiRow, -1);
+        gl.uniform1i(bu.uHiCol, -1);
+        gl.uniform1i(bu.uCols, Math.max(1, cols));
+        gl.uniform1f(bu.uHiAmt, 0);
         gl.uniform3f(bu.uLd, SHADOW_LIGHT[0], SHADOW_LIGHT[1], SHADOW_LIGHT[2]);
         bindShadows(bldProg);
         gl.bindVertexArray(slabVao);
@@ -1469,6 +1560,9 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             // buildings
             gl.uniform1f(bu.uHoverAmt, hoverAmt);
             gl.uniform1i(bu.uHover, hoverAmt > 0 ? hoverIdx : -1);
+            gl.uniform1i(bu.uHiRow, hiAmt > 0 ? hiRow : -1);
+            gl.uniform1i(bu.uHiCol, hiAmt > 0 ? hiCol : -1);
+            gl.uniform1f(bu.uHiAmt, hiAmt);
             gl.bindVertexArray(bldVao);
             gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, count);
         }
@@ -1510,6 +1604,59 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             if (hoverAmt < 0.01) {
                 hoverAmt = 0;
                 hoverIdx = -1;
+            }
+        }
+
+        // the glow of a series or a time: the host's choice (the legend) wins over a label that the
+        // pointer has rested on for a moment
+        const label = pickLabel(frame, dragging, hit !== null);
+        const labelKey = label ? `${label.row}:${label.col}` : '';
+        if (labelKey !== labelSeenKey) {
+            labelSeenKey = labelKey;
+            labelSince = frame.time;
+        }
+        const labelOn = label !== null && frame.time - labelSince >= 0.15;
+        labelRow = labelOn ? label.row : -1;
+        labelCol = labelOn ? label.col : -1;
+        // a click (a press and a release without moving) on a label pins what it names
+        const rawLabel = pickLabel(frame, false, hit !== null, true);
+        const pointer = frame.pointer;
+        if (pointer.down) {
+            if (!clickWasDown) {
+                clickStartX = pointer.x;
+                clickStartY = pointer.y;
+                clickMoved = false;
+                clickTarget = clickLast;
+            }
+            if (Math.hypot(pointer.x - clickStartX, pointer.y - clickStartY) > 4) {
+                clickMoved = true;
+            }
+        } else {
+            if (clickWasDown && clickTarget && !clickMoved) {
+                labelClickHandler?.(clickTarget);
+            }
+            clickTarget = null;
+            clickLast = rawLabel;
+        }
+        clickWasDown = pointer.down;
+        // what glows: the legend's choice, else a label the pointer rests on, else what is pinned
+        // (a press that began on a label keeps it glowing while the board is turned with it)
+        const held = pointer.down ? clickTarget : null;
+        const wantRow = extRow >= 0 ? extRow : held ? held.row : labelOn ? labelRow : pinRow;
+        const wantCol = extRow >= 0 ? -1 : held ? held.col : labelOn ? labelCol : pinCol;
+        const kg = 1 - Math.exp(-frame.dt / 0.08);
+        if (wantRow >= 0 || wantCol >= 0) {
+            if (wantRow !== hiRow || wantCol !== hiCol) {
+                hiRow = wantRow;
+                hiCol = wantCol;
+            }
+            hiAmt += (1 - hiAmt) * kg;
+        } else {
+            hiAmt += (0 - hiAmt) * kg;
+            if (hiAmt < 0.01) {
+                hiAmt = 0;
+                hiRow = -1;
+                hiCol = -1;
             }
         }
 
@@ -1601,6 +1748,16 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             if (!introPending && introT < 0) {
                 applyHome();
             }
+        },
+        setPinned(target) {
+            pinRow = target ? target.row : -1;
+            pinCol = target ? target.col : -1;
+        },
+        setLabelClickHandler(handler) {
+            labelClickHandler = handler;
+        },
+        setHighlight(row) {
+            extRow = row === null ? -1 : row;
         },
         setAutoRotate(on) {
             autoRotate = on;

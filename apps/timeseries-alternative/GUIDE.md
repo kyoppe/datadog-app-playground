@@ -16,6 +16,9 @@ dashboard as a widget.
   scale follows the data: when a taller value arrives, the others get shorter.
 - **Point at a bar** for its exact value, its series and its time. The number on its roof is the
   same value, rounded.
+- **Point at a series name** (or, when stacked, at its entry in the legend) and its boxes glow; point
+  at a **time** and the boxes of that time glow. The others step back.
+  Click one to keep it glowing while you turn the board; click it again to let go.
 - **White stripes** mark the newest column of a live chart: it is still collecting data, so its
   values can still grow.
 
