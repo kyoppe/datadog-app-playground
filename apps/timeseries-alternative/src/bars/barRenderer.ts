@@ -40,7 +40,8 @@ const SLAB_T = 0.008; // slab thickness
 const SLAB_M = 0.018; // slab margin around the page
 // A cell with a value above zero always stands at least this tall, so a small value is never
 // invisible and can still be pointed at: about 40% of the box's width (a small block, not a flat
-// tile), at most a quarter of the tallest bar. Stacked segments stay proportional.
+// tile), at most a quarter of the tallest bar. A stacked tower that is thinner is stretched as a
+// whole, so its segments stay proportional to each other.
 const MIN_BAR_HEIGHT = 0.004;
 const MIN_BAR_OF_WIDTH = 0.4;
 const MIN_BAR_OF_MAX = 0.25;
@@ -243,7 +244,7 @@ void main() {
     vCol = aCol.rgb;
     vUV = aUV;
     vInst = gl_InstanceID;
-    gl_Position = aA.y < 0.0015 ? vec4(2.0, 2.0, 2.0, 1.0) : uVP * vec4(p, 1.0);
+    gl_Position = aA.y < 0.0003 ? vec4(2.0, 2.0, 2.0, 1.0) : uVP * vec4(p, 1.0);
 }
 `;
 
@@ -788,6 +789,26 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         }
         const stackScale = maxH / Math.max(max, maxSum, 1e-9);
         const run = new Float64Array(cols); // running base per column
+        // A tower that would be thinner than the minimum is stretched (all its segments together,
+        // so it stays proportional inside) up to the minimum height.
+        const lift = new Float64Array(cols).fill(1);
+        if (stackedMode) {
+            for (let c = 0; c < cols; c += 1) {
+                const cell = s.cells[c];
+                const tower = colSum[c] * stackScale;
+                if (cell && tower > 0) {
+                    const half = Math.max(
+                        0.002,
+                        (cell.w / 2 - Math.min(cell.w, cell.h) * 0.1) * sc,
+                    );
+                    const floor = Math.min(
+                        Math.max(MIN_BAR_HEIGHT, half * 2 * MIN_BAR_OF_WIDTH),
+                        maxH * MIN_BAR_OF_MAX,
+                    );
+                    lift[c] = Math.max(1, floor / tower);
+                }
+            }
+        }
 
         for (let i = 0; i < n; i += 1) {
             const cell = s.cells[i];
@@ -803,7 +824,7 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
             nt[o + 2] = Math.max(0.002, (cell.w / 2 - m) * sc);
             nt[o + 3] = Math.max(0.002, (cell.h / 2 - m) * sc);
             if (stackedMode) {
-                const h = fin ? Math.max(0, v) * stackScale : 0;
+                const h = fin ? Math.max(0, v) * stackScale * lift[c] : 0;
                 nt[o + 4] = run[c];
                 nt[o + 5] = h;
                 run[c] += h;
@@ -1257,7 +1278,7 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
         for (let i = 0; i < count; i += 1) {
             const o = i * 6;
             const h = cur[o + 5];
-            if (h < 0.002) {
+            if (h < 0.0003) {
                 continue;
             }
             const lo: Vec3 = [cur[o] - cur[o + 2], cur[o + 4], cur[o + 1] - cur[o + 3]];
