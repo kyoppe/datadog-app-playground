@@ -14,8 +14,8 @@ dashboard as a widget.
 - **Columns** are time, the oldest on the left. The times are along the bottom edge.
 - **A bar's height** is its value, starting from zero and relative to the tallest bar on screen. The
   scale follows the data: when a taller value arrives, the others get shorter.
-  A value above zero always has at least a thin slab, so a small value is never invisible and can
-  still be pointed at. A value of zero has no box.
+  A value above zero always has at least a small block (about 40% of the box's width), so a small
+  value is never invisible and can still be pointed at. A value of zero has no box.
 - **Point at a bar** for its exact value, its series and its time. The number on its roof is the
   same value, rounded.
 - **White stripes** mark the newest column of a live chart: it is still collecting data, so its
@@ -38,6 +38,9 @@ It works like the query box of a Datadog Timeseries widget:
   `avg:system.cpu.user{env:prod} by {host}`. A query that cannot be read is not sent, and the
   message says where it goes wrong. The text is also what you copy into Edit Graph
   to chart the same query on a dashboard.
+  Going back to the boxes keeps the query: functions after it, such as `.as_count()` or
+  `.rollup(sum, 60)`, are kept as they are. A query the boxes cannot show (a formula, say) stays as
+  text.
 
 ### How the points of a column are combined
 

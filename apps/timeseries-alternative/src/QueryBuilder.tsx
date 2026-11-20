@@ -8,10 +8,12 @@ import { readRecentMetrics, rememberMetric } from './recentMetrics';
 // with completion for the metric name, the filter tags and the group-by keys. It reads and writes
 // an ordinary metrics query string, so anything it cannot express falls back to a text box.
 
-type Parts = { agg: string; metric: string; filters: string[]; groups: string[] };
+// `suffix` is what follows the scope and the group-by, such as `.as_count()` or `.rollup(sum, 60)`:
+// the builder has no box for it, but it is kept as it is.
+type Parts = { agg: string; metric: string; filters: string[]; groups: string[]; suffix: string };
 
 const QUERY_PATTERN =
-    /^\s*(avg|sum|min|max):([A-Za-z0-9_.:-]+)\{([^}]*)\}(?:\s*by\s*\{([^}]*)\})?\s*$/;
+    /^\s*(avg|sum|min|max):([A-Za-z0-9_.:-]+)\{([^}]*)\}(?:\s*by\s*\{([^}]*)\})?((?:\s*\.[A-Za-z_]+\([^()]*\))*)\s*$/;
 const DEFAULT_AGGREGATIONS = ['avg', 'sum', 'min', 'max'];
 const MAX_OPTIONS = 12;
 const METRIC_NAME_PATTERN = /^[A-Za-z0-9_.:-]+$/;
@@ -33,20 +35,14 @@ function parseQuery(query: string): Parts | null {
         metric: match[2],
         filters: splitList(match[3]),
         groups: splitList(match[4]),
+        suffix: match[5].trim(),
     };
 }
 
-// What the builder starts from when it is given a query it cannot show: the aggregation and the
-// metric at the front of it, if there are any.
-function builderStart(text: string): string {
-    const head = /^\s*(avg|sum|min|max):([A-Za-z0-9_.:-]+)/.exec(text);
-    return head ? `${head[1]}:${head[2]}{*}` : 'avg:system.cpu.user{*}';
-}
-
-function composeQuery({ agg, metric, filters, groups }: Parts) {
+function composeQuery({ agg, metric, filters, groups, suffix }: Parts) {
     const scope = filters.length > 0 ? filters.join(',') : '*';
     const by = groups.length > 0 ? ` by {${groups.join(',')}}` : '';
-    return `${agg}:${metric}{${scope}}${by}`;
+    return `${agg}:${metric}{${scope}}${by}${suffix}`;
 }
 
 function useDebounced<T>(value: T, milliseconds: number) {
@@ -280,6 +276,9 @@ export function QueryBuilder({ value, onChange }: QueryBuilderProps) {
     const parsed = parseQuery(value);
     const [rawMode, setRawMode] = useState(parsed === null);
     const [rawText, setRawText] = useState(value);
+    // Set when "back to the builder" was pressed on a query the builder cannot show (a formula...):
+    // the query stays as it is, in the text box, instead of being cut down to fit.
+    const [cannotShow, setCannotShow] = useState(false);
     // The builder's width, kept when switching to the text box so the bar does not shrink.
     const rootRef = useRef<HTMLDivElement>(null);
     const [rawWidth, setRawWidth] = useState(0);
@@ -309,7 +308,10 @@ export function QueryBuilder({ value, onChange }: QueryBuilderProps) {
                     aria-invalid={problem !== null && rawText !== value}
                     spellCheck={false}
                     value={rawText}
-                    onChange={(event) => setRawText(event.target.value)}
+                    onChange={(event) => {
+                        setRawText(event.target.value);
+                        setCannotShow(false);
+                    }}
                     onKeyDown={(event) => {
                         if (event.key === 'Enter') {
                             applyRaw();
@@ -320,22 +322,15 @@ export function QueryBuilder({ value, onChange }: QueryBuilderProps) {
                 <button
                     type="button"
                     className="qb-toggle"
-                    title={
-                        parseQuery(rawText) === null
-                            ? 'Back to the query builder (what it cannot show is dropped)'
-                            : 'Back to the query builder'
-                    }
+                    title="Back to the query builder"
                     aria-label="Back to the query builder"
                     onClick={() => {
-                        if (parseQuery(rawText) !== null) {
-                            applyRaw();
-                        } else {
-                            // The builder cannot show this query (a formula, a rollup...): start it
-                            // from the metric, so that a query can always be built again.
-                            const fallback = builderStart(rawText);
-                            setRawText(fallback);
-                            onChange(fallback);
+                        if (parseQuery(rawText) === null) {
+                            // The builder has no boxes for this query (a formula...): keep it.
+                            setCannotShow(true);
+                            return;
                         }
+                        applyRaw();
                         setRawMode(false);
                     }}
                 >
@@ -351,6 +346,11 @@ export function QueryBuilder({ value, onChange }: QueryBuilderProps) {
                     </svg>
                 </button>
                 {problem && rawText !== value && <span className="qb-problem">{problem}</span>}
+                {cannotShow && !(problem && rawText !== value) && (
+                    <span className="qb-problem">
+                        The builder cannot show this query: edit it here as text.
+                    </span>
+                )}
             </div>
         );
     }

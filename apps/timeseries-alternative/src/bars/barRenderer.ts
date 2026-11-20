@@ -38,9 +38,12 @@ const ZOOM_MAX = 2.5;
 const FLOATS = 16; // per instance
 const SLAB_T = 0.008; // slab thickness
 const SLAB_M = 0.018; // slab margin around the page
-// A cell with a value above zero always stands at least this tall (a thin slab), so a small value
-// is never invisible and can still be pointed at. Stacked segments stay proportional.
+// A cell with a value above zero always stands at least this tall, so a small value is never
+// invisible and can still be pointed at: about 40% of the box's width (a small block, not a flat
+// tile), at most a quarter of the tallest bar. Stacked segments stay proportional.
 const MIN_BAR_HEIGHT = 0.004;
+const MIN_BAR_OF_WIDTH = 0.4;
+const MIN_BAR_OF_MAX = 0.25;
 const SLAB_TOP = -0.002;
 const SETTLE_TAU = 0.1; // exponential smoothing time constant, about 0.3 s to settle
 const LIGHT = normalize3([-0.45, 0.8, 0.5]);
@@ -806,11 +809,11 @@ export function createBarRenderer(gl: WebGL2RenderingContext): BarRenderer {
                 run[c] += h;
             } else {
                 nt[o + 4] = 0;
-                nt[o + 5] = fin
-                    ? v > 0
-                        ? Math.max(MIN_BAR_HEIGHT, Math.min(1, v / max) * maxH)
-                        : 0
-                    : 0;
+                const floor = Math.min(
+                    Math.max(MIN_BAR_HEIGHT, nt[o + 2] * 2 * MIN_BAR_OF_WIDTH),
+                    maxH * MIN_BAR_OF_MAX,
+                );
+                nt[o + 5] = fin ? (v > 0 ? Math.max(floor, Math.min(1, v / max) * maxH) : 0) : 0;
             }
             // statics
             const q = i * FLOATS;
