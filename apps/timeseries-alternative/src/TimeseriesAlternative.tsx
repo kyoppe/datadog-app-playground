@@ -1690,6 +1690,13 @@ function TimeseriesAlternative() {
                     background: #e6ecff;
                 }
 
+                .qb-options .qb-recent {
+                    margin-left: 8px;
+                    color: #8a90a2;
+                    font-size: 11px;
+                    font-weight: 500;
+                }
+
                 .qb-options li.note {
                     color: #8a90a2;
                     cursor: default;

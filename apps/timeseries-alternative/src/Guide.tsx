@@ -37,13 +37,14 @@ const SECTIONS: { title: string; lines: string[]; hot?: boolean }[] = [
             'Rows are the series, strongest first. Columns are time, the oldest on the left.',
             "A bar's height is its value, from zero, relative to the tallest bar on screen.",
             'Point at a bar for its exact value, its series and its time.',
+            'A value above zero always has at least a thin slab, so a small value can still be pointed at.',
             'White stripes mark the newest column of a live chart: it is still collecting data, so its values can still grow.',
         ],
     },
     {
         title: 'The query (top left)',
         lines: [
-            'metric, from (filters), an aggregation, by (groups): pick from the lists as you type.',
+            'metric, from (filters), an aggregation, by (groups): pick from the lists as you type. The metrics you queried lately come first, tagged Recent.',
             '</> switches to plain query text, for example avg:system.cpu.user{env:prod} by {host}. Copy it into Edit Graph to use it on a dashboard.',
         ],
     },

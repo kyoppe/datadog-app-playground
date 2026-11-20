@@ -14,6 +14,8 @@ dashboard as a widget.
 - **Columns** are time, the oldest on the left. The times are along the bottom edge.
 - **A bar's height** is its value, starting from zero and relative to the tallest bar on screen. The
   scale follows the data: when a taller value arrives, the others get shorter.
+  A value above zero always has at least a thin slab, so a small value is never invisible and can
+  still be pointed at. A value of zero has no box.
 - **Point at a bar** for its exact value, its series and its time. The number on its roof is the
   same value, rounded.
 - **White stripes** mark the newest column of a live chart: it is still collecting data, so its
@@ -29,6 +31,8 @@ It works like the query box of a Datadog Timeseries widget:
 
 - Type a metric name and pick one from the list. `from` takes tags such as `env:prod`; `by` takes
   tag keys such as `host`. Both complete as you type.
+  The metrics you queried lately in this browser come first in the list, tagged *Recent* (the list
+  is kept in this browser only).
 - Pick another aggregation (`avg`, `sum`, `min`, `max`) from the box beside `by`.
 - `</>` turns the box into plain text, for anything the boxes cannot say, such as
   `avg:system.cpu.user{env:prod} by {host}`. A query that cannot be read is not sent, and the

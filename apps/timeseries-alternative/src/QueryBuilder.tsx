@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { getMetricDetails, searchMetricNames } from './metricSearch.backend';
 import { queryProblem } from './queryCheck';
+import { readRecentMetrics, rememberMetric } from './recentMetrics';
 
 // The query builder of a Datadog Timeseries widget: `metric  from  [filters]  avg by  [groups]`,
 // with completion for the metric name, the filter tags and the group-by keys. It reads and writes
@@ -13,6 +14,7 @@ const QUERY_PATTERN =
     /^\s*(avg|sum|min|max):([A-Za-z0-9_.:-]+)\{([^}]*)\}(?:\s*by\s*\{([^}]*)\})?\s*$/;
 const DEFAULT_AGGREGATIONS = ['avg', 'sum', 'min', 'max'];
 const MAX_OPTIONS = 12;
+const METRIC_NAME_PATTERN = /^[A-Za-z0-9_.:-]+$/;
 
 function splitList(text: string | undefined) {
     return (text ?? '')
@@ -62,9 +64,11 @@ type OptionListProps = {
     onPick: (option: string) => void;
     onHover: (index: number) => void;
     note?: string;
+    /** Options that were queried lately in this browser: they carry a small "Recent" tag. */
+    recent?: ReadonlySet<string>;
 };
 
-function OptionList({ options, active, onPick, onHover, note }: OptionListProps) {
+function OptionList({ options, active, onPick, onHover, note, recent }: OptionListProps) {
     if (options.length === 0 && !note) {
         return null;
     }
@@ -84,6 +88,7 @@ function OptionList({ options, active, onPick, onHover, note }: OptionListProps)
                     onMouseEnter={() => onHover(index)}
                 >
                     {option}
+                    {recent?.has(option) && <span className="qb-recent">Recent</span>}
                 </li>
             ))}
             {note && <li className="note">{note}</li>}
@@ -105,12 +110,22 @@ function MetricField({ value, onCommit }: MetricFieldProps) {
         staleTime: 60_000,
         retry: false,
     });
-    const options = open && typed.length >= 2 ? (search.data ?? []) : [];
+    // The metrics queried lately come first (all of them while the field still shows the current
+    // metric, otherwise the ones that contain the typed text), then what the search found.
+    const [recent, setRecent] = useState<string[]>([]);
+    const needle = text.trim() === value ? '' : text.trim().toLowerCase();
+    const recentOptions = open ? recent.filter((name) => name.toLowerCase().includes(needle)) : [];
+    const found = open && typed.length >= 2 ? (search.data ?? []) : [];
+    const options = [...recentOptions, ...found.filter((name) => !recentOptions.includes(name))];
+    const recentSet = new Set(recentOptions);
 
     const commit = (metric: string) => {
         const next = metric.trim();
         setOpen(false);
         if (next) {
+            if (METRIC_NAME_PATTERN.test(next)) {
+                rememberMetric(next);
+            }
             setText(next);
             if (next !== value) {
                 onCommit(next);
@@ -148,7 +163,10 @@ function MetricField({ value, onCommit }: MetricFieldProps) {
                     setActive(0);
                     setOpen(true);
                 }}
-                onFocus={() => setOpen(true)}
+                onFocus={() => {
+                    setRecent(readRecentMetrics());
+                    setOpen(true);
+                }}
                 onBlur={() => commit(text)}
                 onKeyDown={onKeyDown}
             />
@@ -157,6 +175,7 @@ function MetricField({ value, onCommit }: MetricFieldProps) {
                 active={active}
                 onPick={commit}
                 onHover={setActive}
+                recent={recentSet}
                 note={
                     open && typed.length >= 2 && search.isFetching && options.length === 0
                         ? 'Searching...'
