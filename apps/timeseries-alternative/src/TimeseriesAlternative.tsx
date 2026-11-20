@@ -68,6 +68,9 @@ const ROW_COLORS = [
     '#5bb0a0',
 ];
 
+/** Under this many CSS px (about 3 dashboard grid cells) a widget counts as tiny. */
+const TINY_WIDGET = 320;
+
 const compact = new Intl.NumberFormat('en', {
     notation: 'compact',
     maximumSignificantDigits: 3,
@@ -486,6 +489,18 @@ function TimeseriesAlternative() {
     }, [embedded]);
     const quiet =
         embedded && !pointerOver && !queryOpen && !optionsOpen && !guideOpen && !needsSetup;
+
+    // On a dashboard a grid cell is about 110px, so under 3 cells the stack legend would cover the
+    // chart: there it only shows while the pointer is over the widget.
+    const [tinyWidget, setTinyWidget] = useState(
+        () => window.innerWidth < TINY_WIDGET || window.innerHeight < TINY_WIDGET,
+    );
+    useEffect(() => {
+        const measure = () =>
+            setTinyWidget(window.innerWidth < TINY_WIDGET || window.innerHeight < TINY_WIDGET);
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+    }, []);
 
     const gridQuery = useQuery({
         queryKey: [
@@ -2568,7 +2583,7 @@ function TimeseriesAlternative() {
             {native && !ready && !errorText && (
                 <div className="empty">Waiting for the first paint...</div>
             )}
-            {stackedNow && grid && grid.series.length > 0 && (
+            {stackedNow && grid && grid.series.length > 0 && !(tinyWidget && quiet) && (
                 <ul className="legend" aria-label="Series">
                     {grid.series
                         .map((row, index) => ({ row, index }))
